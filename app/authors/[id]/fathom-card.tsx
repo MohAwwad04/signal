@@ -11,11 +11,13 @@ export function FathomCard({
   fathomUserEmail,
   fathomConnectedAt,
   fathomLastSyncedAt,
+  isConnected,
 }: {
   authorId: number;
   fathomUserEmail: string | null;
   fathomConnectedAt: Date | null;
   fathomLastSyncedAt: Date | null;
+  isConnected: boolean;
 }) {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -33,7 +35,7 @@ export function FathomCard({
     }
   }, [searchParams]);
 
-  const connected = !!fathomUserEmail && !!fathomConnectedAt;
+  const connected = isConnected;
 
   async function handleSync() {
     setSyncing(true);
@@ -41,7 +43,7 @@ export function FathomCard({
       const res = await fetch(`/api/fathom/sync/${authorId}`, { method: "POST" });
       const data = await res.json();
       if (res.ok) {
-        setToast(`Synced ${data.synced ?? 0} signals from ${data.meetings ?? 0} new meetings`);
+        setToast(`Synced ${data.synced ?? 0} signals from ${data.newMeetings ?? 0} new meetings`);
         router.refresh();
       } else {
         setToast(data.error ?? "Sync failed");
@@ -91,7 +93,10 @@ export function FathomCard({
             <div className="space-y-3">
               <div className="flex items-center gap-2 text-sm">
                 <span className="inline-block h-2 w-2 rounded-full bg-green-500" />
-                Connected as <span className="font-medium">{fathomUserEmail}</span>
+                Connected
+                {fathomUserEmail && (
+                  <> as <span className="font-medium">{fathomUserEmail}</span></>
+                )}
               </div>
               {fathomLastSyncedAt && (
                 <p className="text-xs text-muted-foreground">

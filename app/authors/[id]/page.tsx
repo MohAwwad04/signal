@@ -35,6 +35,7 @@ export default async function AuthorDetailPage({ params }: { params: { id: strin
             fathomUserEmail={author.fathomUserEmail}
             fathomConnectedAt={author.fathomConnectedAt}
             fathomLastSyncedAt={author.fathomLastSyncedAt}
+            isConnected={!!author.fathomAccessToken}
           />
         </Suspense>
       </div>
