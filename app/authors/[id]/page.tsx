@@ -9,6 +9,8 @@ import { timeAgo } from "@/lib/utils";
 import { FathomCard } from "./fathom-card";
 
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
+export const fetchCache = "force-no-store";
 
 export default async function AuthorDetailPage({ params }: { params: { id: string } }) {
   const id = Number(params.id);
