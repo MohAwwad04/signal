@@ -73,19 +73,22 @@ export async function getValidFathomToken(authorId: number): Promise<string> {
   return tokens.access_token;
 }
 
-/** Fetch the transcript for a single call (list endpoint rarely includes it). */
-async function fetchCallTranscript(token: string, callId: string): Promise<string> {
-  // Try /calls/{id}/transcript first, then fall back to /calls/{id}
-  for (const path of [`/calls/${callId}/transcript`, `/calls/${callId}`]) {
-    const res = await fetch(`${FATHOM_API_BASE}${path}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!res.ok) continue;
-    const d = await res.json();
-    const text = String(d.transcript ?? d.transcript_text ?? d.text ?? d.content ?? "");
-    if (text.length >= 100) return text;
+/** Fetch the transcript for a single recording. */
+async function fetchRecordingTranscript(token: string, recordingId: string): Promise<string> {
+  const res = await fetch(`${FATHOM_API_BASE}/recordings/${recordingId}/transcript`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) return "";
+  const d = await res.json();
+  // Fathom returns { transcript: [{ speaker: { display_name }, text, timestamp }] }
+  if (Array.isArray(d.transcript)) {
+    return d.transcript
+      .map((t: { speaker?: { display_name?: string }; text?: string }) =>
+        `${t.speaker?.display_name ?? "Speaker"}: ${t.text ?? ""}`
+      )
+      .join("\n");
   }
-  return "";
+  return String(d.transcript ?? d.text ?? "");
 }
 
 /** Fetch recent meetings from Fathom for an author. */
@@ -93,27 +96,27 @@ export async function fetchFathomMeetings(
   token: string,
   limit = 10
 ): Promise<FathomMeeting[]> {
-  const res = await fetch(`${FATHOM_API_BASE}/calls?limit=${limit}`, {
+  const res = await fetch(`${FATHOM_API_BASE}/meetings?limit=${limit}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!res.ok) {
     throw new Error(`Fathom API error ${res.status}: ${await res.text()}`);
   }
   const data = await res.json();
-  // Fathom may return { calls: [...] } or an array directly
-  const calls = Array.isArray(data) ? data : data.calls ?? data.data ?? [];
+  // Fathom returns { items: [...], next_cursor, limit }
+  const items = Array.isArray(data.items) ? data.items : [];
   const meetings = await Promise.all(
-    calls.map(async (c: Record<string, unknown>) => {
-      const id = String(c.id ?? c.call_id ?? "");
-      // Transcript is rarely included in list responses — fetch per-call if missing
-      let transcript = String(c.transcript ?? c.transcript_text ?? "");
-      if (transcript.length < 100 && id) {
-        transcript = await fetchCallTranscript(token, id);
+    items.map(async (m: Record<string, unknown>) => {
+      const recordingId = String(m.recording_id ?? "");
+      // List endpoint has transcript: null — fetch per-recording
+      let transcript = "";
+      if (recordingId) {
+        transcript = await fetchRecordingTranscript(token, recordingId);
       }
       return {
-        id,
-        title: String(c.title ?? c.meeting_title ?? "Untitled meeting"),
-        date: String(c.started_at ?? c.date ?? c.created_at ?? ""),
+        id: recordingId,
+        title: String(m.title ?? m.meeting_title ?? "Untitled meeting"),
+        date: String(m.created_at ?? m.scheduled_start_time ?? ""),
         transcript,
       };
     })
@@ -121,26 +124,22 @@ export async function fetchFathomMeetings(
   return meetings;
 }
 
-/** Fetch a user profile from Fathom. */
+/** Fetch user info from Fathom (no /user endpoint — infer from first meeting). */
 export async function fetchFathomUser(
   token: string
 ): Promise<{ id: string; email: string }> {
-  const res = await fetch(`${FATHOM_API_BASE}/user`, {
+  // Fathom has no user profile endpoint — get info from recorded_by on first meeting
+  const res = await fetch(`${FATHOM_API_BASE}/meetings?limit=1`, {
     headers: { Authorization: `Bearer ${token}` },
   });
-  if (!res.ok) {
-    // Some APIs use /me instead of /user
-    const res2 = await fetch(`${FATHOM_API_BASE}/me`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!res2.ok) {
-      return { id: "unknown", email: "unknown" };
-    }
-    const d = await res2.json();
-    return { id: String(d.id ?? ""), email: String(d.email ?? "") };
-  }
-  const d = await res.json();
-  return { id: String(d.id ?? ""), email: String(d.email ?? "") };
+  if (!res.ok) return { id: "", email: "" };
+  const data = await res.json();
+  const meeting = data.items?.[0];
+  if (!meeting?.recorded_by) return { id: "", email: "" };
+  return {
+    id: String(meeting.recorded_by.email ?? ""),
+    email: String(meeting.recorded_by.email ?? ""),
+  };
 }
 
 export type FathomMeeting = {
