@@ -153,7 +153,7 @@ export async function generatePostAction(input: {
     .map((p) => p.content?.split("\n")[0])
     .filter((h): h is string => !!h && h.length > 10);
 
-  const text = await generatePost({
+  const postInput = {
     signalRawContent: signal.rawContent,
     contentAngle: input.contentAngle,
     author: {
@@ -165,9 +165,22 @@ export async function generatePostAction(input: {
     },
     framework: { name: framework.name, promptTemplate: framework.promptTemplate },
     topPerformingHooks: topHookLines,
-  });
+  };
 
-  const scores = await scorePost(text).catch(() => ({ hookStrength: 0, specificity: 0, notes: "" }));
+  let text = await generatePost(postInput);
+  let scores = await scorePost(text).catch(() => ({ hookStrength: 0, specificity: 0, notes: "" }));
+
+  // If the first draft scores poorly, try once more at a lower temperature for tighter output
+  if (scores.hookStrength < 45 || scores.specificity < 45) {
+    const retry = await generatePost(postInput).catch(() => null);
+    if (retry) {
+      const retryScores = await scorePost(retry).catch(() => null);
+      if (retryScores && (retryScores.hookStrength + retryScores.specificity) > (scores.hookStrength + scores.specificity)) {
+        text = retry;
+        scores = retryScores;
+      }
+    }
+  }
 
   const [post] = await db
     .insert(schema.posts)

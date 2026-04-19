@@ -54,27 +54,33 @@ export async function extractSignalsFromTranscript(
   const raw = await textCall({
     maxTokens: 3000,
     temperature: 0.4,
-    system: `You are a content strategist who reads sales and product meeting transcripts and pulls out 'signals' — specific quotes or moments that could become LinkedIn posts.
+    system: `You are a senior content strategist who extracts only the strongest, most LinkedIn-worthy moments from meeting transcripts.
 
-A good signal is:
-- A specific number, result, or customer quote (NOT a vague claim)
-- A buying signal, objection, or 'aha moment'
-- A technical insight that would surprise a practitioner
-- A story with a concrete before/after
+A signal MUST meet ALL of these:
+- Contains a specific number, result, name, or direct quote — not a paraphrase
+- A reader who wasn't in the meeting would find it surprising, useful, or relatable
+- There is enough concrete detail to write a post WITHOUT making things up
+- It is NOT generic advice that could apply to any company
 
-Ignore: small talk, meta-discussion about the meeting, generic advice.
+Immediately discard:
+- Small talk, scheduling, logistics
+- Vague statements like "we need to improve" or "customers love it"
+- Internal process discussions with no external insight
+- Anything where the interesting part is missing from the transcript
 
-For each signal, produce 2-4 content angles (short phrases describing the different ways this signal could be turned into a post).
+Be strict. 3 strong signals beat 8 weak ones.
 
-Return ONLY valid JSON in this exact shape:
+For each signal, produce 2-4 content angles — specific framings, not generic titles.
+
+Return ONLY valid JSON:
 {
   "signals": [
     {
-      "rawContent": "the actual quote or summary of the moment",
-      "contentType": "one of: success_metric | customer_quote | buying_signal | technical_insight | before_after | objection | lesson",
-      "speaker": "who said it (if known, else empty)",
-      "contentAngles": ["angle 1", "angle 2", "angle 3"],
-      "recommendedAuthorRole": "which role would post this best, from the available list"
+      "rawContent": "exact quote or precise summary with specific details preserved",
+      "contentType": "success_metric | customer_quote | buying_signal | technical_insight | before_after | objection | lesson",
+      "speaker": "name if known, else empty string",
+      "contentAngles": ["specific angle 1", "specific angle 2"],
+      "recommendedAuthorRole": "best matching role from the available list"
     }
   ]
 }`,
@@ -85,7 +91,7 @@ Transcript:
 ${transcript.slice(0, 40000)}
 """
 
-Extract 2-8 strong signals. Return JSON only.`,
+Extract only the signals that could produce a genuinely good LinkedIn post. Be selective. Return JSON only.`,
   });
   const parsed = extractJson<{ signals: ExtractedSignal[] }>(raw);
   return parsed.signals ?? [];
@@ -118,35 +124,38 @@ export async function generatePost(input: GeneratePostInput): Promise<string> {
   return textCall({
     maxTokens: 1500,
     temperature: 0.8,
-    system: `You write LinkedIn posts that sound like a real person, not a marketer.
+    system: `You write LinkedIn posts that get saved and shared, not scrolled past.
 
-Hard rules:
-- No hashtags unless the author's style notes explicitly use them.
-- No generic "excited to share" openers.
-- Start with a hook that earns the second line.
-- Short lines. White space is your friend.
-- Specific numbers, specific names, specific moments. No abstraction soup.
-- Never say "In today's fast-paced world" or similar throat-clearing.
-- End with one line that invites response — a question, a counter-take, or silence (no CTA if the post earned its point).
+LinkedIn-specific rules:
+- The first 2 lines are ALL the reader sees before "see more" — make them impossible to skip
+- No hashtags unless the author's style notes explicitly use them
+- No "excited to share", "game-changer", "delighted to announce", or similar filler
+- No throat-clearing intros ("In today's world...", "As a CEO...", "I've been thinking...")
+- Short lines, generous white space — walls of text get skipped
+- Every claim must be anchored to a specific number, name, or moment from the signal
+- Do NOT invent details not present in the signal — if it's not there, don't use it
+- End with one line that makes people want to comment — a question, a contrarian take, or a silence that earns itself
+- Never end with "What do you think?" — it's lazy
 
-Length: 120-220 words unless the framework says otherwise.`,
+Length: 120–220 words unless the framework says otherwise.
+Format: plain text only. No bold, no bullet headers, no markdown.`,
     user: `Write a LinkedIn post for:
 
-Author: ${author.name} (${author.role ?? "—"})
-${author.bio ? `Bio: ${author.bio}` : ""}
-${author.styleNotes ? `Style notes: ${author.styleNotes}` : ""}${voiceSection}${hooksSection}
+Author: ${author.name}${author.role ? ` — ${author.role}` : ""}
+${author.bio ? `About them: ${author.bio}` : ""}
+${author.styleNotes ? `Their style preferences: ${author.styleNotes}` : ""}${voiceSection}${hooksSection}
 
-Framework: ${framework.name}
-Framework guide: ${framework.promptTemplate}
+Framework to follow: ${framework.name}
+${framework.promptTemplate}
 
-Content angle: ${input.contentAngle}
+The specific angle for this post: ${input.contentAngle}
 
-Source signal (what was actually said in the meeting):
+What was actually said / happened (use this as your source — do not fabricate beyond it):
 """
 ${input.signalRawContent}
 """
 
-Return ONLY the post text. No preface, no explanation.`,
+Return ONLY the post text. No title, no preface, no explanation.`,
   });
 }
 
