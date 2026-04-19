@@ -23,7 +23,7 @@ export async function POST(
 
   const meetings = await fetchFathomMeetings(token, 10);
   if (!meetings.length) {
-    return NextResponse.json({ ok: true, synced: 0 });
+    return NextResponse.json({ ok: true, synced: 0, meetings: 0 });
   }
 
   // Check which meetings are already imported
@@ -69,8 +69,8 @@ export async function POST(
 
       const inserted = await db.insert(schema.signals).values(rows).returning();
       totalInserted += inserted.length;
-    } catch {
-      // Skip meetings that fail extraction — don't block the whole sync
+    } catch (e: unknown) {
+      console.error(`[fathom-sync] Failed to process meeting ${meeting.id}:`, e);
     }
   }
 
@@ -79,5 +79,12 @@ export async function POST(
     .set({ fathomLastSyncedAt: new Date() })
     .where(eq(schema.authors.id, authorId));
 
-  return NextResponse.json({ ok: true, synced: totalInserted, meetings: newMeetings.length });
+  return NextResponse.json({
+    ok: true,
+    synced: totalInserted,
+    newMeetings: newMeetings.length,
+    totalMeetings: meetings.length,
+    skippedAlreadyImported: meetings.length - newMeetings.length - meetings.filter((m) => !m.id || m.transcript.length < 100).length,
+    skippedNoTranscript: meetings.filter((m) => m.id && m.transcript.length < 100).length,
+  });
 }

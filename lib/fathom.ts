@@ -38,20 +38,24 @@ export async function getValidFathomToken(authorId: number): Promise<string> {
   });
 
   if (!res.ok) {
-    // Clear tokens — user needs to reconnect
-    await db
-      .update(schema.authors)
-      .set({
-        fathomAccessToken: null,
-        fathomRefreshToken: null,
-        fathomTokenExpiresAt: null,
-        fathomUserId: null,
-        fathomUserEmail: null,
-        fathomConnectedAt: null,
-        fathomLastSyncedAt: null,
-      })
-      .where(eq(schema.authors.id, authorId));
-    throw new Error("Fathom token refresh failed — author must reconnect");
+    if (res.status === 401) {
+      // Auth rejected — clear tokens so user is prompted to reconnect
+      await db
+        .update(schema.authors)
+        .set({
+          fathomAccessToken: null,
+          fathomRefreshToken: null,
+          fathomTokenExpiresAt: null,
+          fathomUserId: null,
+          fathomUserEmail: null,
+          fathomConnectedAt: null,
+          fathomLastSyncedAt: null,
+        })
+        .where(eq(schema.authors.id, authorId));
+      throw new Error("Fathom token refresh failed — author must reconnect");
+    }
+    // Transient error (5xx, etc.) — keep tokens, let caller retry later
+    throw new Error(`Fathom token refresh failed with status ${res.status}`);
   }
 
   const tokens = await res.json();
@@ -69,6 +73,21 @@ export async function getValidFathomToken(authorId: number): Promise<string> {
   return tokens.access_token;
 }
 
+/** Fetch the transcript for a single call (list endpoint rarely includes it). */
+async function fetchCallTranscript(token: string, callId: string): Promise<string> {
+  // Try /calls/{id}/transcript first, then fall back to /calls/{id}
+  for (const path of [`/calls/${callId}/transcript`, `/calls/${callId}`]) {
+    const res = await fetch(`${FATHOM_API_BASE}${path}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) continue;
+    const d = await res.json();
+    const text = String(d.transcript ?? d.transcript_text ?? d.text ?? d.content ?? "");
+    if (text.length >= 100) return text;
+  }
+  return "";
+}
+
 /** Fetch recent meetings from Fathom for an author. */
 export async function fetchFathomMeetings(
   token: string,
@@ -83,12 +102,23 @@ export async function fetchFathomMeetings(
   const data = await res.json();
   // Fathom may return { calls: [...] } or an array directly
   const calls = Array.isArray(data) ? data : data.calls ?? data.data ?? [];
-  return calls.map((c: Record<string, unknown>) => ({
-    id: String(c.id ?? c.call_id ?? ""),
-    title: String(c.title ?? c.meeting_title ?? "Untitled meeting"),
-    date: String(c.started_at ?? c.date ?? c.created_at ?? ""),
-    transcript: String(c.transcript ?? c.transcript_text ?? ""),
-  }));
+  const meetings = await Promise.all(
+    calls.map(async (c: Record<string, unknown>) => {
+      const id = String(c.id ?? c.call_id ?? "");
+      // Transcript is rarely included in list responses — fetch per-call if missing
+      let transcript = String(c.transcript ?? c.transcript_text ?? "");
+      if (transcript.length < 100 && id) {
+        transcript = await fetchCallTranscript(token, id);
+      }
+      return {
+        id,
+        title: String(c.title ?? c.meeting_title ?? "Untitled meeting"),
+        date: String(c.started_at ?? c.date ?? c.created_at ?? ""),
+        transcript,
+      };
+    })
+  );
+  return meetings;
 }
 
 /** Fetch a user profile from Fathom. */
