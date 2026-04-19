@@ -62,26 +62,38 @@ export async function GET(req: NextRequest) {
   }
 
   const tokens = await tokenRes.json();
+  console.log("[fathom-callback] token exchange ok, has access_token:", !!tokens.access_token, "has refresh_token:", !!tokens.refresh_token, "expires_in:", tokens.expires_in);
+
   const expiresAt = new Date(Date.now() + (tokens.expires_in ?? 3600) * 1000);
 
   // Fetch user profile
-  const user = await fetchFathomUser(tokens.access_token).catch(() => ({
-    id: "unknown",
-    email: "unknown",
-  }));
+  const user = await fetchFathomUser(tokens.access_token).catch((e) => {
+    console.error("[fathom-callback] fetchFathomUser failed:", e);
+    return { id: "", email: "" };
+  });
+  console.log("[fathom-callback] user:", user);
 
   // Save to author
-  await db
-    .update(schema.authors)
-    .set({
-      fathomAccessToken: tokens.access_token,
-      fathomRefreshToken: tokens.refresh_token ?? null,
-      fathomTokenExpiresAt: expiresAt,
-      fathomUserId: user.id,
-      fathomUserEmail: user.email,
-      fathomConnectedAt: new Date(),
-    })
-    .where(eq(schema.authors.id, authorId));
+  try {
+    const result = await db
+      .update(schema.authors)
+      .set({
+        fathomAccessToken: tokens.access_token,
+        fathomRefreshToken: tokens.refresh_token ?? null,
+        fathomTokenExpiresAt: expiresAt,
+        fathomUserId: user.id,
+        fathomUserEmail: user.email,
+        fathomConnectedAt: new Date(),
+      })
+      .where(eq(schema.authors.id, authorId))
+      .returning({ id: schema.authors.id });
+    console.log("[fathom-callback] db update result:", result);
+  } catch (e) {
+    console.error("[fathom-callback] db update FAILED:", e);
+    return NextResponse.redirect(
+      `${APP_BASE_URL}/authors/${authorId}?fathom=error&reason=db_save_failed`
+    );
+  }
 
   return NextResponse.redirect(
     `${APP_BASE_URL}/authors/${authorId}?fathom=connected`
