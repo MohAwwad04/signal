@@ -58,6 +58,14 @@ export const authors = pgTable("authors", {
   preferredFrameworks: jsonb("preferred_frameworks").$type<number[]>().default([]),
   active: boolean("active").default(true).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+  // Fathom OAuth integration
+  fathomAccessToken: text("fathom_access_token"),
+  fathomRefreshToken: text("fathom_refresh_token"),
+  fathomTokenExpiresAt: timestamp("fathom_token_expires_at"),
+  fathomUserId: varchar("fathom_user_id", { length: 128 }),
+  fathomUserEmail: varchar("fathom_user_email", { length: 256 }),
+  fathomConnectedAt: timestamp("fathom_connected_at"),
+  fathomLastSyncedAt: timestamp("fathom_last_synced_at"),
 });
 
 /** Reusable post structures (Hook→Story→Lesson, Before/After, etc.) */
@@ -139,6 +147,17 @@ export const authTokens = pgTable("auth_tokens", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (t) => ({
   tokenIdx: uniqueIndex("auth_tokens_token_idx").on(t.token),
+}));
+
+/** CSRF-protected OAuth state for Fathom connect flow. */
+export const oauthStates = pgTable("oauth_states", {
+  id: serial("id").primaryKey(),
+  state: varchar("state", { length: 64 }).notNull(),
+  authorId: integer("author_id").references(() => authors.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
+}, (t) => ({
+  stateIdx: uniqueIndex("oauth_states_state_idx").on(t.state),
 }));
 
 export type Signal = typeof signals.$inferSelect;

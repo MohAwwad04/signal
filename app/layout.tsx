@@ -8,7 +8,8 @@ const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
 export const metadata: Metadata = {
   title: "Signal — content automation",
-  description: "Turn meeting signals into LinkedIn posts that sound like you.",
+  description: "Turn meeting signals into LinkedIn posts.",
+  icons: { icon: "/favicon.png", apple: "/logo.png" },
 };
 
 export default function RootLayout({

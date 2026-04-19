@@ -1,6 +1,12 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-const PUBLIC_PATHS = ["/login", "/api/auth/login", "/api/fathom"];
+const PUBLIC_PATHS = [
+  "/login",
+  "/api/auth/login",
+  "/api/fathom/webhook",
+  "/api/fathom/oauth/callback",
+  "/api/cron",
+];
 
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;

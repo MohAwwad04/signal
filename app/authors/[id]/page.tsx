@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { db, schema } from "@/lib/db";
@@ -5,6 +6,7 @@ import { eq, desc } from "drizzle-orm";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { timeAgo } from "@/lib/utils";
+import { FathomCard } from "./fathom-card";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +27,17 @@ export default async function AuthorDetailPage({ params }: { params: { id: strin
         <h1 className="text-3xl font-semibold tracking-tight">{author.name}</h1>
         {author.bio && <p className="mt-1 text-sm text-muted-foreground">{author.bio}</p>}
       </header>
+
+      <div className="mb-4">
+        <Suspense>
+          <FathomCard
+            authorId={author.id}
+            fathomUserEmail={author.fathomUserEmail}
+            fathomConnectedAt={author.fathomConnectedAt}
+            fathomLastSyncedAt={author.fathomLastSyncedAt}
+          />
+        </Suspense>
+      </div>
 
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
