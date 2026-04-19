@@ -2,6 +2,22 @@ import Anthropic from "@anthropic-ai/sdk";
 
 const MODEL = "claude-sonnet-4-6";
 
+const GLOBAL_RULES = `You are an expert LinkedIn content strategist and B2B storytelling specialist.
+
+Your job is to extract and generate ONLY high-value, high-signal content that is worth publishing on LinkedIn.
+
+Avoid generic, vague, motivational, or obvious content.
+Everything must feel specific, credible, and insight-driven.
+
+GLOBAL RULES (APPLY TO ALL STEPS):
+- No fluff. No generic advice.
+- Prioritize specific numbers, real outcomes, mistakes, lessons, or unique insights.
+- Content must sound like it comes from real experience, not theory.
+- Reject anything that feels: obvious, cliché, broad, or unverifiable.
+- Prefer: contrarian takes, measurable impact, clear before/after transformation, strong opinions backed by experience.
+- If input is weak → extract fewer results or skip entirely. Never fill in with generic content.
+- Quality is the only priority.`;
+
 function client() {
   if (!process.env.ANTHROPIC_API_KEY) {
     throw new Error("ANTHROPIC_API_KEY is not set");
@@ -54,36 +70,34 @@ export async function extractSignalsFromTranscript(
   const raw = await textCall({
     maxTokens: 3000,
     temperature: 0.4,
-    system: `You are a senior content strategist who extracts only the strongest, most LinkedIn-worthy moments from meeting transcripts.
+    system: `${GLOBAL_RULES}
 
-A signal MUST meet ALL of these:
-- Contains a specific number, result, name, or direct quote — not a paraphrase
-- A reader who wasn't in the meeting would find it surprising, useful, or relatable
-- There is enough concrete detail to write a post WITHOUT making things up
-- It is NOT generic advice that could apply to any company
+STEP 1 — Signal Extraction:
 
-Immediately discard:
-- Small talk, scheduling, logistics
-- Vague statements like "we need to improve" or "customers love it"
-- Internal process discussions with no external insight
-- Anything where the interesting part is missing from the transcript
-
-Be strict. 3 strong signals beat 8 weak ones.
-
-For each signal, produce 2-4 content angles — specific framings, not generic titles.
+Extract ONLY high-value signals. A signal is valid ONLY if it includes at least one of:
+- Measurable result (%, $, time, growth)
+- Specific mistake or failure
+- Tactical insight (how something was done)
+- Real customer language
+- Decision-making reasoning
 
 Return ONLY valid JSON:
 {
   "signals": [
     {
-      "rawContent": "exact quote or precise summary with specific details preserved",
+      "rawContent": "exact quote or precise summary with specific details",
       "contentType": "success_metric | customer_quote | buying_signal | technical_insight | before_after | objection | lesson",
-      "speaker": "name if known, else empty string",
-      "contentAngles": ["specific angle 1", "specific angle 2"],
-      "recommendedAuthorRole": "best matching role from the available list"
+      "speaker": "name or empty string",
+      "contentAngles": ["specific angle 1", "specific angle 2", "specific angle 3"],
+      "recommendedAuthorRole": "best matching role from available list"
     }
   ]
-}`,
+}
+
+Rules:
+- Maximum 5 signals
+- Each signal must be strong enough to become a standalone LinkedIn post
+- Skip anything weak — output an empty signals array if nothing qualifies`,
     user: `Available author roles: ${availableAuthorRoles.join(", ")}
 
 Transcript:
@@ -91,7 +105,7 @@ Transcript:
 ${transcript.slice(0, 40000)}
 """
 
-Extract only the signals that could produce a genuinely good LinkedIn post. Be selective. Return JSON only.`,
+Extract only signals strong enough for LinkedIn. Return JSON only.`,
   });
   const parsed = extractJson<{ signals: ExtractedSignal[] }>(raw);
   return parsed.signals ?? [];
@@ -116,46 +130,50 @@ export type GeneratePostInput = {
 export async function generatePost(input: GeneratePostInput): Promise<string> {
   const { author, framework, topPerformingHooks = [] } = input;
   const voiceSection = author.voiceProfile
-    ? `\nLearned voice (based on past edits — match this closely):\n${author.voiceProfile}`
+    ? `\nLearned voice (match this closely):\n${author.voiceProfile}`
     : "";
   const hooksSection = topPerformingHooks.length
-    ? `\nTop-performing hooks from past posts (same author):\n- ${topPerformingHooks.join("\n- ")}`
+    ? `\nTop-performing hooks from this author's past posts:\n- ${topPerformingHooks.join("\n- ")}`
     : "";
   return textCall({
     maxTokens: 1500,
     temperature: 0.8,
-    system: `You write LinkedIn posts that get saved and shared, not scrolled past.
+    system: `${GLOBAL_RULES}
 
-LinkedIn-specific rules:
-- The first 2 lines are ALL the reader sees before "see more" — make them impossible to skip
-- No hashtags unless the author's style notes explicitly use them
-- No "excited to share", "game-changer", "delighted to announce", or similar filler
-- No throat-clearing intros ("In today's world...", "As a CEO...", "I've been thinking...")
-- Short lines, generous white space — walls of text get skipped
-- Every claim must be anchored to a specific number, name, or moment from the signal
-- Do NOT invent details not present in the signal — if it's not there, don't use it
-- End with one line that makes people want to comment — a question, a contrarian take, or a silence that earns itself
-- Never end with "What do you think?" — it's lazy
+STEP 2 — Post Generation:
 
-Length: 120–220 words unless the framework says otherwise.
-Format: plain text only. No bold, no bullet headers, no markdown.`,
-    user: `Write a LinkedIn post for:
+Write ONE LinkedIn post using ONE signal. Follow this structure:
+1. Hook — pattern interrupt, surprising, or specific (first line must stop the scroll)
+2. Context — what happened
+3. Insight — what most people get wrong
+4. Takeaway — clear, practical lesson
 
-Author: ${author.name}${author.role ? ` — ${author.role}` : ""}
+STRICT RULES:
+- Plain text only — no JSON, no title, no explanation, no markdown
+- 120–220 words
+- Short punchy paragraphs, generous white space
+- No buzzwords, no corporate tone
+- No emojis unless the author's style explicitly uses them
+- No hashtags
+- No "excited to share", "game-changer", "In today's world", or throat-clearing openers
+- Every claim must be anchored to a specific detail from the signal — do NOT fabricate
+- End with a line that earns a comment — contrarian, specific question, or a silence that lands
+- Never end with "What do you think?"`,
+    user: `Author: ${author.name}${author.role ? ` — ${author.role}` : ""}
 ${author.bio ? `About them: ${author.bio}` : ""}
-${author.styleNotes ? `Their style preferences: ${author.styleNotes}` : ""}${voiceSection}${hooksSection}
+${author.styleNotes ? `Style preferences: ${author.styleNotes}` : ""}${voiceSection}${hooksSection}
 
-Framework to follow: ${framework.name}
+Framework: ${framework.name}
 ${framework.promptTemplate}
 
-The specific angle for this post: ${input.contentAngle}
+Content angle: ${input.contentAngle}
 
-What was actually said / happened (use this as your source — do not fabricate beyond it):
+Source signal (do not fabricate beyond this):
 """
 ${input.signalRawContent}
 """
 
-Return ONLY the post text. No title, no preface, no explanation.`,
+Return ONLY the post text.`,
   });
 }
 
@@ -172,7 +190,9 @@ export async function assistedEdit(
   return textCall({
     maxTokens: 1500,
     temperature: 0.6,
-    system: `You edit LinkedIn posts. You make the specific change requested, preserve the author's voice, and do NOT rewrite things that weren't part of the instruction. Return only the edited post text.`,
+    system: `${GLOBAL_RULES}
+
+You edit LinkedIn posts. Make only the specific change requested. Preserve the author's voice. Do NOT rewrite anything outside the instruction scope. Return only the edited post text.`,
     user: `Instruction: ${instruction}${voice}
 
 Current post:
@@ -194,10 +214,15 @@ export async function scorePost(text: string): Promise<{
   const raw = await textCall({
     maxTokens: 500,
     temperature: 0.2,
-    system: `You score LinkedIn posts on two dimensions:
+    system: `${GLOBAL_RULES}
 
-- hook_strength (0-100): Does the first 1-2 lines make a thumb stop? Specific, surprising, or tension-inducing = high. Generic, corporate, or vague = low.
-- specificity (0-100): Does the post use concrete numbers, names, moments? Or is it abstraction soup?
+STEP 3 — Post Scoring:
+
+Score on two dimensions:
+- hook_strength (0-100): Do the first 1-2 lines stop a scroll? Specific, surprising, tension-inducing = high. Generic, corporate, vague = low.
+- specificity (0-100): Does the post use concrete numbers, names, moments? Abstraction soup = low.
+
+Be critical, not nice. Penalize vagueness heavily. Reward specificity and originality.
 
 Return ONLY valid JSON: { "hook_strength": <int>, "specificity": <int>, "notes": "one short sentence of feedback" }`,
     user: `Post:\n"""${text}"""`,
@@ -225,18 +250,31 @@ export async function learnVoiceFromEdits(
   return textCall({
     maxTokens: 1200,
     temperature: 0.3,
-    system: `You build a concise, actionable 'voice profile' for an author by analyzing how they edit AI-generated drafts. Focus on patterns: sentence length, word choices they add, phrases they remove, structural preferences, what they make more specific, what they cut as fluff.
+    system: `${GLOBAL_RULES}
 
-Output format: a plain text profile with 5-10 bullet-style lines, each a concrete rule. No preamble. No markdown headers. Keep it under 200 words. It will be pasted directly into future generation prompts.`,
+STEP 4 — Voice Profile:
+
+Analyze the differences between original and edited posts. Build a concise, actionable voice profile.
+
+Focus on: sentence length, tone, structure, word choice, formatting patterns.
+
+Output: plain text, 5–10 bullet-style rules, under 200 words.
+No preamble. No markdown headers. Each rule must be concrete and directly applicable.
+
+Example style:
+- Uses short sentences (under 12 words)
+- Starts with a bold or contrarian hook
+- Avoids filler words and adjectives
+- Breaks lines frequently for readability`,
     user: `Current profile (may be empty):
 """
 ${currentProfile ?? "(none yet)"}
 """
 
-Recent edits from this author:
+Recent edits:
 ${edits}
 
-Update the profile. Merge with the current profile where relevant, drop anything contradicted by the new edits.`,
+Update the profile. Merge with current where relevant, drop anything contradicted by new edits.`,
   });
 }
 
