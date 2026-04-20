@@ -9,6 +9,7 @@ import { timeAgo } from "@/lib/utils";
 import { FathomCard } from "./fathom-card";
 import { LinkedInCard } from "./linkedin-card";
 import { ContentAngles } from "./content-angles";
+import { ArrowUpRight, User } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -24,16 +25,20 @@ export default async function AuthorDetailPage({ params }: { params: { id: strin
 
   return (
     <div className="mx-auto w-full max-w-4xl p-6 md:p-10">
-      <header className="mb-6">
-        <div className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
+      <header className="mb-8">
+        <div className="flex items-center gap-2 mb-1">
+          <User className="h-4 w-4 text-cyan-500" />
+          <span className="text-xs font-semibold text-cyan-500 uppercase tracking-widest">Author</span>
+        </div>
+        <div className="flex items-center gap-3 mb-1">
+          <h1 className="text-3xl font-bold tracking-tight">{author.name}</h1>
           {author.role && <Badge variant="secondary">{author.role}</Badge>}
           {!author.active && <Badge variant="destructive">Inactive</Badge>}
         </div>
-        <h1 className="text-3xl font-semibold tracking-tight">{author.name}</h1>
         {author.bio && <p className="mt-1 text-sm text-muted-foreground">{author.bio}</p>}
       </header>
 
-      <div className="mb-4">
+      <div className="space-y-4 mb-8">
         <Suspense>
           <FathomCard
             authorId={author.id}
@@ -43,9 +48,6 @@ export default async function AuthorDetailPage({ params }: { params: { id: strin
             isConnected={!!author.fathomAccessToken}
           />
         </Suspense>
-      </div>
-
-      <div className="mb-4">
         <Suspense>
           <LinkedInCard
             authorId={author.id}
@@ -57,22 +59,20 @@ export default async function AuthorDetailPage({ params }: { params: { id: strin
         </Suspense>
       </div>
 
-      <div className="mb-4">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Content angles</CardTitle>
-            <CardDescription>Topics this author focuses on. Used to guide post generation from transcripts.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ContentAngles
-              authorId={author.id}
-              initialAngles={(author.contentAngles as string[] | null) ?? []}
-            />
-          </CardContent>
-        </Card>
-      </div>
+      <Card className="mb-4">
+        <CardHeader>
+          <CardTitle className="text-base">Content angles</CardTitle>
+          <CardDescription>Topics this author focuses on. Used to guide post generation from transcripts.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ContentAngles
+            authorId={author.id}
+            initialAngles={(author.contentAngles as string[] | null) ?? []}
+          />
+        </CardContent>
+      </Card>
 
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-2 mb-10">
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Voice profile</CardTitle>
@@ -88,7 +88,9 @@ export default async function AuthorDetailPage({ params }: { params: { id: strin
         </Card>
 
         <Card>
-          <CardHeader><CardTitle className="text-base">Style notes (manual)</CardTitle></CardHeader>
+          <CardHeader>
+            <CardTitle className="text-base">Style notes <span className="font-normal text-muted-foreground">(manual)</span></CardTitle>
+          </CardHeader>
           <CardContent>
             {author.styleNotes ? (
               <p className="text-sm">{author.styleNotes}</p>
@@ -99,43 +101,60 @@ export default async function AuthorDetailPage({ params }: { params: { id: strin
         </Card>
       </div>
 
-      <h2 className="mt-10 mb-3 text-sm font-medium text-muted-foreground">Posts ({posts.length})</h2>
-      <div className="grid gap-3">
-        {posts.length === 0 && <div className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">No posts yet.</div>}
+      <div className="mb-4 flex items-center justify-between">
+        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Posts ({posts.length})</h2>
+      </div>
+      <div className="grid gap-2.5 mb-10">
+        {posts.length === 0 && (
+          <div className="rounded-2xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
+            No posts yet.
+          </div>
+        )}
         {posts.map((p) => (
-          <Link key={p.id} href={`/posts/${p.id}`} className="rounded-lg border bg-card p-4 transition-colors hover:border-primary/40">
-            <p className="line-clamp-2 text-sm">{p.content}</p>
-            <div className="mt-2 text-[11px] text-muted-foreground">
-              <Badge variant={p.status === "published" ? "default" : "secondary"}>{p.status}</Badge>
-              <span className="ml-2">Updated {timeAgo(p.updatedAt)}</span>
+          <Link
+            key={p.id}
+            href={`/posts/${p.id}`}
+            className="group flex items-start justify-between gap-4 rounded-2xl border border-border bg-card p-4 transition-all duration-200 hover:border-primary/30 hover:shadow-glow-sm hover:-translate-y-0.5"
+          >
+            <div className="min-w-0 flex-1">
+              <p className="line-clamp-2 text-sm">{p.content}</p>
+              <div className="mt-2.5 flex items-center gap-2 text-[11px]">
+                <Badge variant={p.status === "published" ? "default" : "secondary"}>{p.status}</Badge>
+                <span className="text-muted-foreground">Updated {timeAgo(p.updatedAt)}</span>
+              </div>
             </div>
+            <ArrowUpRight className="h-4 w-4 shrink-0 text-muted-foreground/30 transition-all duration-200 group-hover:text-primary group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
           </Link>
         ))}
       </div>
 
-      <h2 className="mt-10 mb-3 text-sm font-medium text-muted-foreground">Recent edits</h2>
+      <div className="mb-4 flex items-center justify-between">
+        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Recent edits</h2>
+      </div>
       <div className="grid gap-3">
-        {recentEdits.length === 0 && <div className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">No edits yet.</div>}
+        {recentEdits.length === 0 && (
+          <div className="rounded-2xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
+            No edits yet.
+          </div>
+        )}
         {recentEdits.map((e) => (
-          <Card key={e.id}>
-            <CardHeader>
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <Badge variant="secondary">{e.editType}</Badge>
-                <span>{timeAgo(e.createdAt)}</span>
+          <div key={e.id} className="rounded-2xl border border-border bg-card overflow-hidden">
+            <div className="flex items-center gap-2 px-4 pt-3 pb-2 border-b border-border/50">
+              <Badge variant="secondary">{e.editType}</Badge>
+              <span className="text-xs text-muted-foreground">{timeAgo(e.createdAt)}</span>
+              {e.instruction && <span className="text-xs text-muted-foreground ml-1 line-clamp-1">&ldquo;{e.instruction}&rdquo;</span>}
+            </div>
+            <div className="grid md:grid-cols-2 gap-0">
+              <div className="p-4 border-r border-border/50">
+                <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">Before</div>
+                <p className="line-clamp-6 whitespace-pre-wrap text-xs text-muted-foreground">{e.before}</p>
               </div>
-              {e.instruction && <CardDescription className="mt-1">&ldquo;{e.instruction}&rdquo;</CardDescription>}
-            </CardHeader>
-            <CardContent className="grid gap-3 md:grid-cols-2">
-              <div>
-                <div className="mb-1 text-[11px] font-medium text-muted-foreground">Before</div>
-                <p className="line-clamp-6 whitespace-pre-wrap text-xs">{e.before}</p>
-              </div>
-              <div>
-                <div className="mb-1 text-[11px] font-medium text-muted-foreground">After</div>
+              <div className="p-4">
+                <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-500/70">After</div>
                 <p className="line-clamp-6 whitespace-pre-wrap text-xs">{e.after}</p>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         ))}
       </div>
     </div>

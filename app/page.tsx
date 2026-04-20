@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { timeAgo } from "@/lib/utils";
-import { ArrowUpRight, Radio, FileEdit, ClipboardList, Send, Users } from "lucide-react";
+import { ArrowUpRight, Radio, FileEdit, ClipboardList, Send, Users, Zap } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -51,15 +51,20 @@ export default async function DashboardPage() {
 
   return (
     <div className="mx-auto w-full max-w-6xl p-6 md:p-10">
-      <header className="mb-8 flex items-end justify-between">
+      {/* Header */}
+      <header className="mb-8 flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-semibold tracking-tight">Dashboard</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <div className="flex items-center gap-2 mb-1">
+            <Zap className="h-4 w-4 text-cyan-500" />
+            <span className="text-xs font-semibold text-cyan-500 uppercase tracking-widest">Overview</span>
+          </div>
+          <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
+          <p className="mt-1.5 text-sm text-muted-foreground">
             Turn meeting signals into LinkedIn posts that sound like you.
           </p>
         </div>
         <Link href="/signals/new">
-          <Button>
+          <Button size="lg">
             <Radio className="h-4 w-4" />
             Capture signals
           </Button>
@@ -69,10 +74,10 @@ export default async function DashboardPage() {
       {!stats.dbOk ? (
         <Card className="border-amber-500/30 bg-amber-500/5">
           <CardHeader>
-            <CardTitle className="text-amber-800 dark:text-amber-300">Database not connected</CardTitle>
+            <CardTitle className="text-amber-700 dark:text-amber-300">Database not connected</CardTitle>
             <CardDescription>
-              Set <code className="rounded bg-background px-1 py-0.5 text-xs">DATABASE_URL</code> and run{" "}
-              <code className="rounded bg-background px-1 py-0.5 text-xs">npm run db:push</code> to finish setup.
+              Set <code className="rounded-lg bg-background px-1.5 py-0.5 text-xs">DATABASE_URL</code> and run{" "}
+              <code className="rounded-lg bg-background px-1.5 py-0.5 text-xs">npm run db:push</code> to finish setup.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -81,46 +86,48 @@ export default async function DashboardPage() {
         </Card>
       ) : (
         <>
-          <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
-            <Stat icon={<Radio className="h-4 w-4" />} label="Unused signals" value={stats.unused} href="/signals" />
-            <Stat icon={<FileEdit className="h-4 w-4" />} label="Drafts" value={stats.drafts} href="/review?tab=drafts" />
-            <Stat icon={<ClipboardList className="h-4 w-4" />} label="In review" value={stats.inReview} href="/review" />
-            <Stat icon={<Send className="h-4 w-4" />} label="Published" value={stats.published} href="/analytics" />
-            <Stat icon={<Users className="h-4 w-4" />} label="Authors" value={stats.authors} href="/authors" />
+          {/* Stats grid */}
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+            <Stat icon={<Radio     className="h-4 w-4" />} label="Unused signals" value={stats.unused}    href="/signals"          color="blue" />
+            <Stat icon={<FileEdit  className="h-4 w-4" />} label="Drafts"         value={stats.drafts}    href="/review?tab=drafts" color="purple" />
+            <Stat icon={<ClipboardList className="h-4 w-4" />} label="In review"  value={stats.inReview}  href="/review"            color="amber" />
+            <Stat icon={<Send      className="h-4 w-4" />} label="Published"      value={stats.published} href="/analytics"         color="emerald" />
+            <Stat icon={<Users     className="h-4 w-4" />} label="Authors"        value={stats.authors}   href="/authors"           color="cyan" />
           </div>
 
+          {/* Recent posts */}
           <div className="mt-10">
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-sm font-medium text-muted-foreground">Recent posts</h2>
-              <Link href="/review" className="text-xs text-muted-foreground hover:text-foreground">
-                See all →
+              <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Recent posts</h2>
+              <Link href="/review" className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1">
+                See all <ArrowUpRight className="h-3 w-3" />
               </Link>
             </div>
             {stats.recent.length === 0 ? (
               <EmptyState />
             ) : (
-              <div className="grid gap-3">
+              <div className="grid gap-2.5">
                 {stats.recent.map((p) => (
                   <Link
                     key={p.id}
                     href={`/posts/${p.id}`}
-                    className="group flex items-start justify-between gap-4 rounded-lg border border-border bg-card p-4 transition-colors hover:border-primary/40"
+                    className="group flex items-start justify-between gap-4 rounded-2xl border border-border bg-card p-4 transition-all duration-200 hover:border-primary/30 hover:shadow-glow-sm hover:-translate-y-0.5"
                   >
                     <div className="min-w-0 flex-1">
-                      <p className="line-clamp-2 text-sm">{p.content.slice(0, 220)}</p>
-                      <div className="mt-2 flex items-center gap-2 text-[11px] text-muted-foreground">
+                      <p className="line-clamp-2 text-sm leading-relaxed">{p.content.slice(0, 220)}</p>
+                      <div className="mt-2.5 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
                         <StatusBadge status={p.status} />
-                        <span>·</span>
+                        <span className="text-muted-foreground/40">·</span>
                         <span>Updated {timeAgo(p.updatedAt)}</span>
                         {p.hookStrengthScore != null && (
                           <>
-                            <span>·</span>
-                            <span>Hook {p.hookStrengthScore}/100</span>
+                            <span className="text-muted-foreground/40">·</span>
+                            <span className="text-primary/70 font-medium">Hook {p.hookStrengthScore}/100</span>
                           </>
                         )}
                       </div>
                     </div>
-                    <ArrowUpRight className="h-4 w-4 shrink-0 text-muted-foreground transition-colors group-hover:text-primary" />
+                    <ArrowUpRight className="h-4 w-4 shrink-0 text-muted-foreground/30 transition-all duration-200 group-hover:text-primary group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
                   </Link>
                 ))}
               </div>
@@ -132,28 +139,39 @@ export default async function DashboardPage() {
   );
 }
 
-function Stat({ icon, label, value, href }: { icon: React.ReactNode; label: string; value: number; href: string }) {
+const colorMap: Record<string, { icon: string; bg: string; ring: string }> = {
+  blue:    { icon: "text-blue-500",   bg: "bg-blue-500/10",   ring: "hover:border-blue-400/30"   },
+  purple:  { icon: "text-purple-500", bg: "bg-purple-500/10", ring: "hover:border-purple-400/30" },
+  amber:   { icon: "text-amber-500",  bg: "bg-amber-500/10",  ring: "hover:border-amber-400/30"  },
+  emerald: { icon: "text-emerald-500",bg: "bg-emerald-500/10",ring: "hover:border-emerald-400/30"},
+  cyan:    { icon: "text-cyan-500",   bg: "bg-cyan-500/10",   ring: "hover:border-cyan-400/30"   },
+};
+
+function Stat({ icon, label, value, href, color }: {
+  icon: React.ReactNode; label: string; value: number; href: string; color: string;
+}) {
+  const c = colorMap[color] ?? colorMap.blue;
   return (
-    <Link href={href} className="group rounded-xl border border-border bg-card p-4 transition-colors hover:border-primary/40">
-      <div className="flex items-center justify-between text-muted-foreground">
-        <div className="flex items-center gap-2 text-xs">
-          {icon}
-          {label}
-        </div>
-        <ArrowUpRight className="h-3.5 w-3.5 opacity-0 transition-opacity group-hover:opacity-100" />
+    <Link
+      href={href}
+      className={`group rounded-2xl border border-border bg-card p-4 transition-all duration-200 ${c.ring} hover:shadow-glow-sm hover:-translate-y-0.5`}
+    >
+      <div className={`mb-3 inline-flex rounded-xl p-2 ${c.bg}`}>
+        <span className={c.icon}>{icon}</span>
       </div>
-      <div className="mt-2 text-2xl font-semibold tracking-tight">{value}</div>
+      <div className="text-2xl font-bold tracking-tight">{value}</div>
+      <div className="mt-0.5 text-xs text-muted-foreground">{label}</div>
     </Link>
   );
 }
 
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, { variant: any; label: string }> = {
-    draft: { variant: "secondary", label: "Draft" },
-    in_review: { variant: "warning", label: "In review" },
-    approved: { variant: "success", label: "Approved" },
-    rejected: { variant: "destructive", label: "Rejected" },
-    published: { variant: "default", label: "Published" },
+    draft:      { variant: "secondary",   label: "Draft"     },
+    in_review:  { variant: "warning",     label: "In review" },
+    approved:   { variant: "success",     label: "Approved"  },
+    rejected:   { variant: "destructive", label: "Rejected"  },
+    published:  { variant: "default",     label: "Published" },
   };
   const m = map[status] ?? { variant: "secondary", label: status };
   return <Badge variant={m.variant}>{m.label}</Badge>;
@@ -161,9 +179,13 @@ function StatusBadge({ status }: { status: string }) {
 
 function EmptyState() {
   return (
-    <div className="rounded-xl border border-dashed border-border p-10 text-center">
-      <p className="text-sm text-muted-foreground">No posts yet. Start by capturing a signal from a meeting.</p>
-      <div className="mt-4">
+    <div className="rounded-2xl border border-dashed border-border p-12 text-center">
+      <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10">
+        <Radio className="h-5 w-5 text-primary" />
+      </div>
+      <p className="text-sm font-medium">No posts yet</p>
+      <p className="mt-1 text-xs text-muted-foreground">Start by capturing a signal from a meeting transcript.</p>
+      <div className="mt-5">
         <Link href="/signals/new">
           <Button size="sm">Paste a transcript</Button>
         </Link>

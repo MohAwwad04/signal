@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { createAuthorAction } from "@/lib/actions";
 import { toast } from "@/components/ui/toaster";
-import { Loader2 } from "lucide-react";
+import { Loader2, UserPlus } from "lucide-react";
 
 export default function NewAuthorPage() {
   const router = useRouter();
@@ -32,18 +32,30 @@ export default function NewAuthorPage() {
 
   return (
     <div className="mx-auto w-full max-w-2xl p-6 md:p-10">
-      <h1 className="mb-6 text-3xl font-semibold tracking-tight">New author</h1>
+      <header className="mb-8">
+        <div className="flex items-center gap-2 mb-1">
+          <UserPlus className="h-4 w-4 text-cyan-500" />
+          <span className="text-xs font-semibold text-cyan-500 uppercase tracking-widest">Authors</span>
+        </div>
+        <h1 className="text-3xl font-bold tracking-tight">New author</h1>
+        <p className="mt-1.5 text-sm text-muted-foreground">
+          Add someone to write in the voice of. The voice profile builds up from edits over time.
+        </p>
+      </header>
+
       <Card>
-        <CardHeader><CardTitle>Profile</CardTitle></CardHeader>
+        <CardHeader>
+          <CardTitle className="text-base">Profile</CardTitle>
+        </CardHeader>
         <CardContent className="space-y-4">
           <Field label="Name *">
-            <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+            <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Jane Smith" />
           </Field>
           <Field label="Role">
             <Input value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })} placeholder="CTO, Head of Sales, ..." />
           </Field>
           <Field label="LinkedIn URL">
-            <Input value={form.linkedinUrl} onChange={(e) => setForm({ ...form, linkedinUrl: e.target.value })} />
+            <Input value={form.linkedinUrl} onChange={(e) => setForm({ ...form, linkedinUrl: e.target.value })} placeholder="https://linkedin.com/in/..." />
           </Field>
           <Field label="Bio">
             <Textarea value={form.bio} onChange={(e) => setForm({ ...form, bio: e.target.value })} placeholder="A sentence or two about what they do." />
@@ -55,10 +67,10 @@ export default function NewAuthorPage() {
               placeholder="e.g. 'hates emojis', 'uses hashtags', 'short lines'..."
             />
           </Field>
-          <div className="flex justify-end">
-            <Button onClick={submit} disabled={loading || !form.name}>
-              {loading && <Loader2 className="h-4 w-4 animate-spin" />}
-              Create
+          <div className="flex justify-end pt-1">
+            <Button onClick={submit} disabled={loading || !form.name} size="lg">
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
+              {loading ? "Creating…" : "Create author"}
             </Button>
           </div>
         </CardContent>
@@ -69,9 +81,9 @@ export default function NewAuthorPage() {
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div>
+    <div className="space-y-1.5">
       <Label>{label}</Label>
-      <div className="mt-1">{children}</div>
+      {children}
     </div>
   );
 }

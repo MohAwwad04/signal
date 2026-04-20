@@ -20,7 +20,7 @@ import {
   recordAnalyticsAction,
   setLinkedinPostUrlAction,
 } from "@/lib/actions";
-import { Loader2, Scissors, Gauge, RefreshCw, Send, Check, X, Image as ImageIcon, BarChart3 } from "lucide-react";
+import { Loader2, Scissors, Gauge, RefreshCw, Send, Check, X, Image as ImageIcon, BarChart3, FileEdit } from "lucide-react";
 
 export function PostEditor({
   post,
@@ -143,16 +143,20 @@ export function PostEditor({
 
   return (
     <div className="mx-auto w-full max-w-6xl p-6 md:p-10">
-      <header className="mb-6 flex items-start justify-between gap-4">
+      <header className="mb-8 flex items-start justify-between gap-4">
         <div>
-          <div className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
-            <StatusBadge status={post.status} />
-            {author && <span>· {author.name}{author.role ? ` (${author.role})` : ""}</span>}
-            {post.contentAngle && <span className="line-clamp-1">· {post.contentAngle}</span>}
+          <div className="flex items-center gap-2 mb-1">
+            <FileEdit className="h-4 w-4 text-purple-500" />
+            <span className="text-xs font-semibold text-purple-500 uppercase tracking-widest">Post editor</span>
           </div>
-          <h1 className="text-2xl font-semibold tracking-tight">Post #{post.id}</h1>
+          <div className="flex items-center gap-2.5 mb-0.5">
+            <StatusBadge status={post.status} />
+            {author && <span className="text-sm text-muted-foreground">{author.name}{author.role ? ` · ${author.role}` : ""}</span>}
+            {post.contentAngle && <span className="text-sm text-muted-foreground line-clamp-1">· {post.contentAngle}</span>}
+          </div>
+          <h1 className="text-2xl font-bold tracking-tight">Post #{post.id}</h1>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-shrink-0">
           {post.status === "draft" && (
             <Button onClick={submit} disabled={loading === "submit"}>
               {loading === "submit" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
@@ -188,10 +192,10 @@ export function PostEditor({
         </div>
       </header>
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
-        <div className="space-y-6">
+      <div className="grid gap-6 lg:grid-cols-[1fr_300px]">
+        <div className="space-y-5">
           <Card>
-            <CardHeader className="flex-row items-center justify-between">
+            <CardHeader className="flex-row items-center justify-between pb-3">
               <div>
                 <CardTitle className="text-base">Post content</CardTitle>
                 <CardDescription>Edit directly, or use assisted edits below.</CardDescription>
@@ -214,7 +218,7 @@ export function PostEditor({
           </Card>
 
           <Card>
-            <CardHeader>
+            <CardHeader className="pb-3">
               <CardTitle className="text-base">Assisted edits</CardTitle>
               <CardDescription>Claude edits in place, preserving {author?.name ?? "the author"}&apos;s voice.</CardDescription>
             </CardHeader>
@@ -255,7 +259,7 @@ export function PostEditor({
 
           {(post.status === "approved" || post.status === "published") && (
             <Card>
-              <CardHeader className="flex-row items-center justify-between">
+              <CardHeader className="flex-row items-center justify-between pb-3">
                 <div>
                   <CardTitle className="text-base">Design brief</CardTitle>
                   <CardDescription>Claude generates a brief + SVG mock. Hand this to your designer.</CardDescription>
@@ -273,15 +277,15 @@ export function PostEditor({
                   <Field label="Audience">{brief.targetAudience}</Field>
                   <Field label="Tone">{brief.tone}</Field>
                   <Field label="Key messages">
-                    <ul className="list-disc pl-5">
+                    <ul className="list-disc pl-5 space-y-0.5">
                       {brief.keyMessages?.map((m, i) => <li key={i}>{m}</li>)}
                     </ul>
                   </Field>
                   <Field label="Design direction">{brief.designDirection}</Field>
                   {brief.svg && (
                     <div>
-                      <div className="mb-1 text-xs font-medium text-muted-foreground">SVG mock</div>
-                      <div className="overflow-hidden rounded-lg border" dangerouslySetInnerHTML={{ __html: brief.svg }} />
+                      <div className="mb-1.5 text-xs font-medium text-muted-foreground">SVG mock</div>
+                      <div className="overflow-hidden rounded-xl border" dangerouslySetInnerHTML={{ __html: brief.svg }} />
                     </div>
                   )}
                 </CardContent>
@@ -295,7 +299,7 @@ export function PostEditor({
         <aside className="space-y-4">
           {post.status === "published" && (
             <Card>
-              <CardHeader><CardTitle className="text-sm">LinkedIn post URL</CardTitle></CardHeader>
+              <CardHeader className="pb-3"><CardTitle className="text-sm">LinkedIn post URL</CardTitle></CardHeader>
               <CardContent className="space-y-2">
                 {post.linkedinPostUrn ? (
                   <p className="text-xs text-muted-foreground break-all">URN: {post.linkedinPostUrn}</p>
@@ -313,6 +317,7 @@ export function PostEditor({
                   variant="outline"
                   onClick={saveLinkedinUrl}
                   disabled={loading === "linkedin-url" || !linkedinUrlInput.trim() || linkedinUrlInput.startsWith("(URN:")}
+                  className="w-full"
                 >
                   {loading === "linkedin-url" ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
                   Save URL
@@ -321,7 +326,7 @@ export function PostEditor({
             </Card>
           )}
           <Card>
-            <CardHeader><CardTitle className="text-sm">Scores</CardTitle></CardHeader>
+            <CardHeader className="pb-3"><CardTitle className="text-sm">Scores</CardTitle></CardHeader>
             <CardContent className="space-y-3">
               <ScoreBar label="Hook strength" value={post.hookStrengthScore ?? 0} />
               <ScoreBar label="Specificity" value={post.specificityScore ?? 0} />
@@ -329,12 +334,12 @@ export function PostEditor({
           </Card>
           {post.reviewerNotes && (
             <Card>
-              <CardHeader><CardTitle className="text-sm">Reviewer notes</CardTitle></CardHeader>
+              <CardHeader className="pb-3"><CardTitle className="text-sm">Reviewer notes</CardTitle></CardHeader>
               <CardContent><p className="text-sm">{post.reviewerNotes}</p></CardContent>
             </Card>
           )}
           <Card>
-            <CardHeader><CardTitle className="text-sm">Original draft</CardTitle></CardHeader>
+            <CardHeader className="pb-3"><CardTitle className="text-sm">Original draft</CardTitle></CardHeader>
             <CardContent>
               <p className="whitespace-pre-wrap text-xs text-muted-foreground">{post.originalContent}</p>
             </CardContent>
@@ -354,8 +359,10 @@ function AssistButton({
       onClick={onClick}
       disabled={disabled}
       className={
-        "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs transition-colors " +
-        (active ? "border-primary bg-primary/10" : "border-border hover:border-primary/40 disabled:opacity-50")
+        "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-all duration-200 " +
+        (active
+          ? "border-primary bg-primary/10 text-primary"
+          : "border-border hover:border-primary/40 hover:bg-primary/5 disabled:opacity-50")
       }
     >
       {active && <Loader2 className="h-3 w-3 animate-spin" />}
@@ -367,22 +374,22 @@ function AssistButton({
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <div className="mb-1 text-xs font-medium text-muted-foreground">{label}</div>
+      <div className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60">{label}</div>
       <div className="text-sm">{children}</div>
     </div>
   );
 }
 
 function ScoreBar({ label, value }: { label: string; value: number }) {
-  const color = value >= 75 ? "bg-emerald-500" : value >= 50 ? "bg-amber-500" : "bg-destructive";
+  const color = value >= 75 ? "from-emerald-500 to-emerald-400" : value >= 50 ? "from-amber-500 to-amber-400" : "from-red-500 to-red-400";
   return (
     <div>
-      <div className="mb-1 flex justify-between text-xs">
+      <div className="mb-1.5 flex justify-between text-xs">
         <span className="text-muted-foreground">{label}</span>
-        <span className="font-medium">{value}/100</span>
+        <span className="font-semibold">{value}/100</span>
       </div>
       <div className="h-1.5 w-full overflow-hidden rounded-full bg-secondary">
-        <div className={`h-full ${color} transition-all`} style={{ width: `${value}%` }} />
+        <div className={`h-full bg-gradient-to-r ${color} transition-all duration-500`} style={{ width: `${value}%` }} />
       </div>
     </div>
   );
@@ -390,11 +397,11 @@ function ScoreBar({ label, value }: { label: string; value: number }) {
 
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, { variant: any; label: string }> = {
-    draft: { variant: "secondary", label: "Draft" },
-    in_review: { variant: "warning", label: "In review" },
-    approved: { variant: "success", label: "Approved" },
-    rejected: { variant: "destructive", label: "Rejected" },
-    published: { variant: "default", label: "Published" },
+    draft:      { variant: "secondary",   label: "Draft"     },
+    in_review:  { variant: "warning",     label: "In review" },
+    approved:   { variant: "success",     label: "Approved"  },
+    rejected:   { variant: "destructive", label: "Rejected"  },
+    published:  { variant: "default",     label: "Published" },
   };
   const m = map[status] ?? { variant: "secondary", label: status };
   return <Badge variant={m.variant}>{m.label}</Badge>;
@@ -421,7 +428,7 @@ function AnalyticsPanel({ postId }: { postId: number }) {
 
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className="pb-3">
         <CardTitle className="text-base">Log performance</CardTitle>
         <CardDescription>Numbers here feed into future generations — the model learns what works.</CardDescription>
       </CardHeader>
@@ -443,8 +450,8 @@ function AnalyticsPanel({ postId }: { postId: number }) {
 
 function NumField({ label, value, onChange }: { label: string; value: number; onChange: (n: number) => void }) {
   return (
-    <div>
-      <div className="mb-1 text-xs text-muted-foreground">{label}</div>
+    <div className="space-y-1">
+      <div className="text-xs text-muted-foreground">{label}</div>
       <Input type="number" min={0} value={value} onChange={(e) => onChange(Number(e.target.value) || 0)} />
     </div>
   );

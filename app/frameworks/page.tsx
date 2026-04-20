@@ -1,8 +1,8 @@
 import { db, schema } from "@/lib/db";
 import { desc } from "drizzle-orm";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { NewFrameworkForm } from "./new-form";
+import { Layers } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -11,9 +11,13 @@ export default async function FrameworksPage() {
   const frameworks = await db.select().from(schema.frameworks).orderBy(desc(schema.frameworks.createdAt)).catch(() => []);
   return (
     <div className="mx-auto w-full max-w-5xl p-6 md:p-10">
-      <header className="mb-6">
-        <h1 className="text-3xl font-semibold tracking-tight">Frameworks</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
+      <header className="mb-8">
+        <div className="flex items-center gap-2 mb-1">
+          <Layers className="h-4 w-4 text-purple-500" />
+          <span className="text-xs font-semibold text-purple-500 uppercase tracking-widest">Frameworks</span>
+        </div>
+        <h1 className="text-3xl font-bold tracking-tight">Post frameworks</h1>
+        <p className="mt-1.5 text-sm text-muted-foreground">
           Post structures the generator can use. Add your own — the prompt template tells Claude how to apply it.
         </p>
       </header>
@@ -21,23 +25,23 @@ export default async function FrameworksPage() {
       <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
         <div className="grid gap-3">
           {frameworks.length === 0 && (
-            <div className="rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground">
-              No frameworks yet. Create one on the right (or seed defaults via the seed script).
+            <div className="rounded-2xl border border-dashed border-border p-12 text-center">
+              <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-purple-500/10">
+                <Layers className="h-5 w-5 text-purple-500" />
+              </div>
+              <p className="text-sm font-medium">No frameworks yet</p>
+              <p className="mt-1 text-xs text-muted-foreground">Create one on the right, or seed defaults via the seed script.</p>
             </div>
           )}
           {frameworks.map((f) => (
-            <Card key={f.id}>
-              <CardHeader>
-                <CardTitle className="text-base">{f.name}</CardTitle>
-                <CardDescription>{f.description}</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="mb-2 flex flex-wrap gap-1">
-                  {(f.bestFor ?? []).map((b) => <Badge key={b} variant="secondary">{b.replaceAll("_", " ")}</Badge>)}
-                </div>
-                <pre className="whitespace-pre-wrap rounded-md bg-secondary/50 p-3 text-xs text-muted-foreground">{f.promptTemplate}</pre>
-              </CardContent>
-            </Card>
+            <div key={f.id} className="rounded-2xl border border-border bg-card p-5 transition-all duration-200 hover:border-purple-400/30 hover:shadow-glow-sm">
+              <div className="mb-1 text-base font-semibold">{f.name}</div>
+              <p className="mb-3 text-sm text-muted-foreground">{f.description}</p>
+              <div className="mb-3 flex flex-wrap gap-1.5">
+                {(f.bestFor ?? []).map((b) => <Badge key={b} variant="secondary">{b.replaceAll("_", " ")}</Badge>)}
+              </div>
+              <pre className="whitespace-pre-wrap rounded-xl bg-secondary/50 p-3 text-xs text-muted-foreground">{f.promptTemplate}</pre>
+            </div>
           ))}
         </div>
 
