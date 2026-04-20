@@ -7,7 +7,7 @@ const LINKEDIN_CLIENT_ID = process.env.LINKEDIN_CLIENT_ID ?? "";
 // openid + profile + email → OIDC (no review needed)
 // r_member_social → read post stats (requires Community Management API approval)
 const LINKEDIN_SCOPES = "openid profile email r_member_social";
-const APP_BASE_URL = process.env.APP_BASE_URL ?? "https://signal-swart-one.vercel.app";
+const APP_BASE_URL = process.env.APP_BASE_URL ?? "https://signal-umber-ten.vercel.app";
 
 export async function GET(req: NextRequest) {
   const authorId = req.nextUrl.searchParams.get("authorId");

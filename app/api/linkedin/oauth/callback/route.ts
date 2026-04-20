@@ -6,7 +6,7 @@ import { fetchLinkedinProfile } from "@/lib/linkedin";
 const LINKEDIN_TOKEN_URL = "https://www.linkedin.com/oauth/v2/accessToken";
 const LINKEDIN_CLIENT_ID = process.env.LINKEDIN_CLIENT_ID ?? "";
 const LINKEDIN_CLIENT_SECRET = process.env.LINKEDIN_CLIENT_SECRET ?? "";
-const APP_BASE_URL = process.env.APP_BASE_URL ?? "https://signal-swart-one.vercel.app";
+const APP_BASE_URL = process.env.APP_BASE_URL ?? "https://signal-umber-ten.vercel.app";
 
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl;

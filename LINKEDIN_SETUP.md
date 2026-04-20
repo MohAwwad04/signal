@@ -21,7 +21,7 @@ This guide walks you through creating a LinkedIn Developer app and configuring t
 1. In your app, go to the **Auth** tab.
 2. Under **OAuth 2.0 settings → Authorized redirect URLs**, add:
    ```
-   https://signal-swart-one.vercel.app/api/linkedin/oauth/callback
+   https://signal-umber-ten.vercel.app/api/linkedin/oauth/callback
    ```
    (Replace the domain with your actual Vercel deployment URL if different.)
 3. Save changes.
@@ -73,7 +73,7 @@ Go to your Vercel project → **Settings → Environment Variables** and add:
 | `LINKEDIN_CLIENT_SECRET` | Your LinkedIn app Client Secret |
 
 The `APP_BASE_URL` variable should already be set. If not, add it:
-| `APP_BASE_URL` | `https://signal-swart-one.vercel.app` |
+| `APP_BASE_URL` | `https://signal-umber-ten.vercel.app` |
 
 After adding variables, **redeploy** the project for them to take effect.
 

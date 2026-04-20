@@ -6,7 +6,7 @@ const FATHOM_AUTHORIZE_URL =
   process.env.FATHOM_AUTHORIZE_URL ?? "https://fathom.video/external/v1/oauth2/authorize";
 const FATHOM_CLIENT_ID = process.env.FATHOM_CLIENT_ID ?? "";
 const FATHOM_SCOPES = process.env.FATHOM_SCOPES ?? "public_api";
-const APP_BASE_URL = process.env.APP_BASE_URL ?? "https://signal-swart-one.vercel.app";
+const APP_BASE_URL = process.env.APP_BASE_URL ?? "https://signal-umber-ten.vercel.app";
 
 export async function GET(req: NextRequest) {
   const authorId = req.nextUrl.searchParams.get("authorId");

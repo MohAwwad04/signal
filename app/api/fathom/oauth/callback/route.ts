@@ -7,7 +7,7 @@ const FATHOM_TOKEN_URL =
   process.env.FATHOM_TOKEN_URL ?? "https://fathom.video/external/v1/oauth2/token";
 const FATHOM_CLIENT_ID = process.env.FATHOM_CLIENT_ID ?? "";
 const FATHOM_CLIENT_SECRET = process.env.FATHOM_CLIENT_SECRET ?? "";
-const APP_BASE_URL = process.env.APP_BASE_URL ?? "https://signal-swart-one.vercel.app";
+const APP_BASE_URL = process.env.APP_BASE_URL ?? "https://signal-umber-ten.vercel.app";
 
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl;
