@@ -1,9 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { db, schema } from "@/lib/db";
-import { isNotNull } from "drizzle-orm";
+import { isNotNull, eq, inArray } from "drizzle-orm";
 import { getValidFathomToken, fetchFathomMeetings } from "@/lib/fathom";
-import { extractSignalsFromTranscript } from "@/lib/claude";
-import { eq, inArray } from "drizzle-orm";
+import { generatePostsFromTranscript } from "@/lib/claude";
 
 export const maxDuration = 300; // 5 min for Vercel Pro
 
@@ -19,9 +18,11 @@ export async function GET(req: NextRequest) {
     .from(schema.authors)
     .where(isNotNull(schema.authors.fathomAccessToken));
 
-  const results: { authorId: number; synced: number; error?: string }[] = [];
   const allAuthors = await db.select().from(schema.authors).where(eq(schema.authors.active, true));
   const roles = allAuthors.map((a) => a.role ?? "").filter(Boolean);
+  const allAngles = allAuthors.flatMap((a) => (a.contentAngles as string[] | null) ?? []);
+
+  const results: { authorId: number; synced: number; error?: string }[] = [];
 
   for (const author of connectedAuthors) {
     try {
@@ -44,17 +45,17 @@ export async function GET(req: NextRequest) {
       let synced = 0;
       for (const meeting of newMeetings) {
         try {
-          const extracted = await extractSignalsFromTranscript(meeting.transcript, roles);
-          if (!extracted.length) continue;
-          const rows = extracted.map((s) => ({
+          const generated = await generatePostsFromTranscript(meeting.transcript, roles, allAngles);
+          if (!generated.length) continue;
+          const rows = generated.map((s) => ({
             rawContent: s.rawContent,
-            contentType: s.contentType,
-            speaker: s.speaker ?? null,
-            contentAngles: s.contentAngles ?? [],
+            contentType: "post",
+            speaker: null as string | null,
+            contentAngles: [] as string[],
             recommendedAuthorId:
               s.recommendedAuthorRole
-                ? allAuthors.find((a) => a.role?.toLowerCase() === s.recommendedAuthorRole?.toLowerCase())?.id ?? null
-                : null,
+                ? allAuthors.find((a) => a.role?.toLowerCase() === s.recommendedAuthorRole?.toLowerCase())?.id ?? author.id
+                : author.id,
             source: "fathom" as const,
             sourceMeetingId: meeting.id,
             sourceMeetingTitle: meeting.title,
