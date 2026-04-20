@@ -26,7 +26,10 @@ export async function extractSignalsAction(
   const authors = await db.select().from(schema.authors).where(eq(schema.authors.active, true));
   const roles = authors.map((a) => a.role ?? "").filter(Boolean);
   const allAngles = authors.flatMap((a) => (a.contentAngles as string[] | null) ?? []);
-  const generated = await generatePostsFromTranscript(transcript, roles, allAngles);
+  const voiceProfiles = Object.fromEntries(
+    authors.filter((a) => a.role && a.voiceProfile).map((a) => [a.role!, a.voiceProfile!])
+  );
+  const generated = await generatePostsFromTranscript(transcript, roles, allAngles, voiceProfiles);
   if (!generated.length) return { inserted: 0, signals: [] };
   const rows = generated.map((s) => {
     const recAuthor = s.recommendedAuthorRole
@@ -50,7 +53,39 @@ export async function extractSignalsAction(
 }
 
 export async function updateSignalContentAction(id: number, content: string) {
+  const [current] = await db.select().from(schema.signals).where(eq(schema.signals.id, id));
+  if (!current || current.rawContent === content) return;
+
   await db.update(schema.signals).set({ rawContent: content }).where(eq(schema.signals.id, id));
+
+  if (current.recommendedAuthorId) {
+    await db.insert(schema.edits).values({
+      signalId: id,
+      authorId: current.recommendedAuthorId,
+      before: current.rawContent,
+      after: content,
+      editType: "manual",
+    });
+
+    const recent = await db
+      .select()
+      .from(schema.edits)
+      .where(eq(schema.edits.authorId, current.recommendedAuthorId))
+      .orderBy(desc(schema.edits.createdAt))
+      .limit(5);
+
+    if (recent.length >= 2) {
+      const [author] = await db.select().from(schema.authors).where(eq(schema.authors.id, current.recommendedAuthorId));
+      const profile = await learnVoiceFromEdits(
+        author?.voiceProfile ?? null,
+        recent.map((e) => ({ before: e.before, after: e.after, instruction: e.instruction ?? undefined }))
+      ).catch(() => null);
+      if (profile) {
+        await db.update(schema.authors).set({ voiceProfile: profile }).where(eq(schema.authors.id, current.recommendedAuthorId));
+      }
+    }
+  }
+
   revalidatePath("/signals");
   revalidatePath(`/signals/${id}`);
 }

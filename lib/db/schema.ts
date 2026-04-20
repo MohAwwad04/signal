@@ -102,15 +102,16 @@ export const posts = pgTable("posts", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
-/** Every edit to a post — used to learn each author's voice. */
+/** Every edit to a post or signal — used to learn each author's voice. */
 export const edits = pgTable("edits", {
   id: serial("id").primaryKey(),
-  postId: integer("post_id").references(() => posts.id, { onDelete: "cascade" }).notNull(),
+  postId: integer("post_id").references(() => posts.id, { onDelete: "cascade" }),
+  signalId: integer("signal_id").references(() => signals.id, { onDelete: "cascade" }),
   authorId: integer("author_id").references(() => authors.id, { onDelete: "set null" }),
   before: text("before").notNull(),
   after: text("after").notNull(),
-  editType: varchar("edit_type", { length: 32 }).notNull(), // manual, assisted_shorter, assisted_more_technical, assisted_hook, etc.
-  instruction: text("instruction"), // for assisted edits, what the user asked for
+  editType: varchar("edit_type", { length: 32 }).notNull(),
+  instruction: text("instruction"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

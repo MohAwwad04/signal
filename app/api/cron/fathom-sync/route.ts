@@ -21,6 +21,9 @@ export async function GET(req: NextRequest) {
   const allAuthors = await db.select().from(schema.authors).where(eq(schema.authors.active, true));
   const roles = allAuthors.map((a) => a.role ?? "").filter(Boolean);
   const allAngles = allAuthors.flatMap((a) => (a.contentAngles as string[] | null) ?? []);
+  const voiceProfiles = Object.fromEntries(
+    allAuthors.filter((a) => a.role && a.voiceProfile).map((a) => [a.role!, a.voiceProfile!])
+  );
 
   const results: { authorId: number; synced: number; error?: string }[] = [];
 
@@ -45,7 +48,7 @@ export async function GET(req: NextRequest) {
       let synced = 0;
       for (const meeting of newMeetings) {
         try {
-          const generated = await generatePostsFromTranscript(meeting.transcript, roles, allAngles);
+          const generated = await generatePostsFromTranscript(meeting.transcript, roles, allAngles, voiceProfiles);
           if (!generated.length) continue;
           const rows = generated.map((s) => ({
             rawContent: s.rawContent,

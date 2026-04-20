@@ -63,7 +63,8 @@ export type GeneratedSignal = {
 export async function generatePostsFromTranscript(
   transcript: string,
   availableAuthorRoles: string[],
-  contentAngles?: string[]
+  contentAngles?: string[],
+  voiceProfiles?: Record<string, string> // role → voice profile
 ): Promise<GeneratedSignal[]> {
   const anglesHint = contentAngles?.length
     ? `\nContent angles to focus on (use these as inspiration if relevant): ${contentAngles.join(", ")}.`
@@ -71,11 +72,14 @@ export async function generatePostsFromTranscript(
   const authorHint = availableAuthorRoles.length
     ? `\nAvailable author roles: ${availableAuthorRoles.join(", ")}. After each post, add exactly one line: RECOMMENDED_FOR: [role] — pick the role whose audience best fits the post.`
     : "";
+  const voiceHint = voiceProfiles && Object.keys(voiceProfiles).length
+    ? `\n\nLearned voice profiles per author (match these closely when writing for that role):\n${Object.entries(voiceProfiles).map(([role, profile]) => `${role}: ${profile}`).join("\n")}`
+    : "";
 
   const raw = await textCall({
     maxTokens: 4000,
     temperature: 0.8,
-    system: `You are a top-tier LinkedIn ghostwriter known for posts that go viral because they feel real, punchy, and genuinely useful.${anglesHint}`,
+    system: `You are a top-tier LinkedIn ghostwriter known for posts that go viral because they feel real, punchy, and genuinely useful.${anglesHint}${voiceHint}`,
     user: `Read this meeting transcript and turn it into 1–3 LinkedIn posts that people actually stop scrolling for.
 
 Each post MUST:

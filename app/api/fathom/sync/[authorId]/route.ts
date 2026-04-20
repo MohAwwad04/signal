@@ -43,12 +43,15 @@ export async function POST(
   const authors = await db.select().from(schema.authors).where(eq(schema.authors.active, true));
   const roles = authors.map((a) => a.role ?? "").filter(Boolean);
   const allAngles = authors.flatMap((a) => (a.contentAngles as string[] | null) ?? []);
+  const voiceProfiles = Object.fromEntries(
+    authors.filter((a) => a.role && a.voiceProfile).map((a) => [a.role!, a.voiceProfile!])
+  );
 
   let totalInserted = 0;
 
   for (const meeting of newMeetings) {
     try {
-      const generated = await generatePostsFromTranscript(meeting.transcript, roles, allAngles);
+      const generated = await generatePostsFromTranscript(meeting.transcript, roles, allAngles, voiceProfiles);
       if (!generated.length) continue;
 
       const recAuthorMatch = (role?: string) =>
