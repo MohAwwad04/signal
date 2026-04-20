@@ -45,6 +45,7 @@ export default async function SignalsPage() {
           {signals.map((s) => {
             const authorName = s.recommendedAuthorId ? authorMap.get(s.recommendedAuthorId) : null;
             const firstLine = s.rawContent.split("\n").find((l) => l.trim()) ?? s.rawContent;
+            const hashtags = Array.from(new Set(s.rawContent.match(/#[\w\u0080-\uFFFF]+/g) ?? [])).slice(0, 5);
             return (
               <Link
                 key={s.id}
@@ -62,7 +63,12 @@ export default async function SignalsPage() {
                       {authorName}
                     </span>
                   )}
-                  {s.sourceMeetingTitle && <span>· {s.sourceMeetingTitle}</span>}
+                  {hashtags.map((tag) => (
+                    <span key={tag} className="rounded-full bg-primary/8 px-2 py-0.5 text-[10px] font-medium text-primary/70">
+                      {tag}
+                    </span>
+                  ))}
+                  {s.sourceMeetingTitle && <span className="ml-auto">· {s.sourceMeetingTitle}</span>}
                   <span>· {timeAgo(s.createdAt)}</span>
                 </div>
               </Link>

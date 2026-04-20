@@ -141,6 +141,33 @@ ${transcript.slice(0, 40000)}
     .filter((p) => p.rawContent.length > 80);
 }
 
+/* ---------- framework reformat ---------- */
+
+export async function reformatPostWithFramework(
+  content: string,
+  framework: { name: string; promptTemplate: string }
+): Promise<string> {
+  return textCall({
+    maxTokens: 2000,
+    temperature: 0.7,
+    system: `You are an expert LinkedIn ghostwriter. Reformat the given post to follow a specific writing framework while keeping ALL the original ideas, facts, emojis, and hashtags intact.`,
+    user: `Framework: ${framework.name}
+Framework instructions: ${framework.promptTemplate}
+
+Reformat the post below to follow this framework exactly.
+- Keep every idea, insight, emoji, and hashtag from the original
+- Do NOT add new information
+- Do NOT remove existing information
+- Only restructure the flow and format to match the framework
+- Keep LinkedIn short-line style
+
+ORIGINAL POST:
+${content}
+
+Return only the reformatted post — no explanations, no labels.`,
+  });
+}
+
 /* ---------- post generation ---------- */
 
 export type GeneratePostInput = {

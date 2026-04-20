@@ -13,7 +13,10 @@ export const revalidate = 0;
 
 export default async function SignalDetailPage({ params }: { params: { id: string } }) {
   const id = Number(params.id);
-  const [signal] = await db.select().from(schema.signals).where(eq(schema.signals.id, id));
+  const [signal, frameworks] = await Promise.all([
+    db.select().from(schema.signals).where(eq(schema.signals.id, id)).then((r) => r[0]),
+    db.select({ id: schema.frameworks.id, name: schema.frameworks.name, description: schema.frameworks.description }).from(schema.frameworks),
+  ]);
   if (!signal) notFound();
 
   const author = signal.recommendedAuthorId
@@ -44,6 +47,7 @@ export default async function SignalDetailPage({ params }: { params: { id: strin
         signalId={signal.id}
         initialContent={signal.rawContent}
         authorName={author?.name ?? null}
+        frameworks={frameworks}
       />
 
       {signal.notes && (

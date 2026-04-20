@@ -10,6 +10,7 @@ import {
   scorePost,
   learnVoiceFromEdits,
   generateDesignBrief,
+  reformatPostWithFramework,
 } from "@/lib/claude";
 
 /* ========== SIGNALS ========== */
@@ -71,6 +72,12 @@ export async function createSignalAction(input: {
     .returning();
   revalidatePath("/signals");
   return row;
+}
+
+export async function applyFrameworkToSignalAction(content: string, frameworkId: number): Promise<string> {
+  const [framework] = await db.select().from(schema.frameworks).where(eq(schema.frameworks.id, frameworkId));
+  if (!framework) throw new Error("Framework not found.");
+  return reformatPostWithFramework(content, framework);
 }
 
 export async function archiveSignalAction(id: number) {
