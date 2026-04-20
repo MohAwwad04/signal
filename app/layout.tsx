@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import { Sidebar } from "@/components/sidebar";
+import { Shell } from "@/components/shell";
 import { Toaster } from "@/components/ui/toaster";
 import { ThemeProvider } from "@/components/theme-provider";
 
@@ -19,8 +19,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="min-h-screen bg-background font-sans">
         <ThemeProvider>
           <div className="flex min-h-screen">
-            <Sidebar />
-            <main className="flex-1 overflow-x-hidden">{children}</main>
+            <Shell>{children}</Shell>
           </div>
           <Toaster />
         </ThemeProvider>
