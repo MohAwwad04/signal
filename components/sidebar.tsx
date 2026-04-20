@@ -4,7 +4,6 @@ import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
   Radio,
-  ClipboardList,
   Users,
   BarChart3,
   Sparkles,
@@ -15,7 +14,6 @@ import { cn } from "@/lib/utils";
 const items = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/signals", label: "Signals", icon: Radio },
-  { href: "/review", label: "Review queue", icon: ClipboardList },
   { href: "/authors", label: "Authors", icon: Users },
   { href: "/analytics", label: "Analytics", icon: BarChart3 },
   { href: "/frameworks", label: "Frameworks", icon: Wrench },

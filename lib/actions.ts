@@ -4,7 +4,7 @@ import { db, schema } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { desc, eq, and, sql } from "drizzle-orm";
 import {
-  extractSignalsFromTranscript,
+  generatePostsFromTranscript,
   generatePost,
   assistedEdit,
   scorePost,
@@ -24,17 +24,18 @@ export async function extractSignalsAction(
   }
   const authors = await db.select().from(schema.authors).where(eq(schema.authors.active, true));
   const roles = authors.map((a) => a.role ?? "").filter(Boolean);
-  const extracted = await extractSignalsFromTranscript(transcript, roles);
-  if (!extracted.length) return { inserted: 0, signals: [] };
-  const rows = extracted.map((s) => {
+  const allAngles = authors.flatMap((a) => (a.contentAngles as string[] | null) ?? []);
+  const generated = await generatePostsFromTranscript(transcript, roles, allAngles);
+  if (!generated.length) return { inserted: 0, signals: [] };
+  const rows = generated.map((s) => {
     const recAuthor = s.recommendedAuthorRole
       ? authors.find((a) => a.role?.toLowerCase() === s.recommendedAuthorRole?.toLowerCase())
       : undefined;
     return {
       rawContent: s.rawContent,
-      contentType: s.contentType,
-      speaker: s.speaker ?? null,
-      contentAngles: s.contentAngles ?? [],
+      contentType: "post",
+      speaker: null as string | null,
+      contentAngles: [] as string[],
       recommendedAuthorId: recAuthor?.id ?? null,
       source: "manual" as const,
       sourceMeetingTitle: meetingTitle ?? null,
@@ -45,6 +46,12 @@ export async function extractSignalsAction(
   revalidatePath("/signals");
   revalidatePath("/");
   return { inserted: inserted.length, signals: inserted };
+}
+
+export async function updateSignalContentAction(id: number, content: string) {
+  await db.update(schema.signals).set({ rawContent: content }).where(eq(schema.signals.id, id));
+  revalidatePath("/signals");
+  revalidatePath(`/signals/${id}`);
 }
 
 export async function createSignalAction(input: {
@@ -105,6 +112,13 @@ export async function updateAuthorAction(id: number, patch: Partial<{
   await db.update(schema.authors).set(patch).where(eq(schema.authors.id, id));
   revalidatePath("/authors");
   revalidatePath(`/authors/${id}`);
+}
+
+export async function updateAuthorContentAnglesAction(authorId: number, angles: string[]) {
+  const filtered = angles.map((a) => a.trim()).filter(Boolean);
+  if (filtered.length === 0) throw new Error("At least one content angle is required.");
+  await db.update(schema.authors).set({ contentAngles: filtered } as any).where(eq(schema.authors.id, authorId));
+  revalidatePath(`/authors/${authorId}`);
 }
 
 /* ========== FRAMEWORKS ========== */

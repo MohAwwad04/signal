@@ -1,8 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { revalidatePath } from "next/cache";
 import { db, schema } from "@/lib/db";
-import { eq, and, inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { getValidFathomToken, fetchFathomMeetings } from "@/lib/fathom";
-import { extractSignalsFromTranscript } from "@/lib/claude";
+import { generatePostsFromTranscript } from "@/lib/claude";
 
 export async function POST(
   _req: NextRequest,
@@ -26,7 +27,6 @@ export async function POST(
     return NextResponse.json({ ok: true, synced: 0, meetings: 0 });
   }
 
-  // Check which meetings are already imported
   const meetingIds = meetings.map((m) => m.id).filter(Boolean);
   const existing = meetingIds.length
     ? await db
@@ -40,27 +40,26 @@ export async function POST(
     (m) => m.id && !existingIds.has(m.id) && m.transcript.length >= 100
   );
 
-  let totalInserted = 0;
-  const authors = await db
-    .select()
-    .from(schema.authors)
-    .where(eq(schema.authors.active, true));
+  const authors = await db.select().from(schema.authors).where(eq(schema.authors.active, true));
   const roles = authors.map((a) => a.role ?? "").filter(Boolean);
+  const allAngles = authors.flatMap((a) => (a.contentAngles as string[] | null) ?? []);
+
+  let totalInserted = 0;
 
   for (const meeting of newMeetings) {
     try {
-      const extracted = await extractSignalsFromTranscript(meeting.transcript, roles);
-      if (!extracted.length) continue;
+      const generated = await generatePostsFromTranscript(meeting.transcript, roles, allAngles);
+      if (!generated.length) continue;
 
       const recAuthorMatch = (role?: string) =>
         role ? authors.find((a) => a.role?.toLowerCase() === role.toLowerCase()) : undefined;
 
-      const rows = extracted.map((s) => ({
+      const rows = generated.map((s) => ({
         rawContent: s.rawContent,
-        contentType: s.contentType,
-        speaker: s.speaker ?? null,
-        contentAngles: s.contentAngles ?? [],
-        recommendedAuthorId: recAuthorMatch(s.recommendedAuthorRole)?.id ?? null,
+        contentType: "post",
+        speaker: null as string | null,
+        contentAngles: [] as string[],
+        recommendedAuthorId: recAuthorMatch(s.recommendedAuthorRole)?.id ?? authorId,
         source: "fathom" as const,
         sourceMeetingId: meeting.id,
         sourceMeetingTitle: meeting.title,
@@ -78,6 +77,11 @@ export async function POST(
     .update(schema.authors)
     .set({ fathomLastSyncedAt: new Date() })
     .where(eq(schema.authors.id, authorId));
+
+  if (totalInserted > 0) {
+    revalidatePath("/signals");
+    revalidatePath("/");
+  }
 
   return NextResponse.json({
     ok: true,

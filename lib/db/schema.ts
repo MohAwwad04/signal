@@ -56,6 +56,7 @@ export const authors = pgTable("authors", {
   /** Stylistic guardrails the author insists on. */
   styleNotes: text("style_notes"),
   preferredFrameworks: jsonb("preferred_frameworks").$type<number[]>().default([]),
+  contentAngles: jsonb("content_angles").$type<string[]>(),
   active: boolean("active").default(true).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   // Fathom OAuth integration

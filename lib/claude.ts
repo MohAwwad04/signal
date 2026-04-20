@@ -53,62 +53,86 @@ function extractJson<T>(raw: string): T {
   return JSON.parse(match ? match[0] : cleaned) as T;
 }
 
-/* ---------- signal extraction ---------- */
+/* ---------- post generation from transcript ---------- */
 
-export type ExtractedSignal = {
+export type GeneratedSignal = {
   rawContent: string;
-  contentType: string;
-  speaker?: string;
-  contentAngles: string[];
   recommendedAuthorRole?: string;
 };
 
-export async function extractSignalsFromTranscript(
+export async function generatePostsFromTranscript(
   transcript: string,
-  availableAuthorRoles: string[]
-): Promise<ExtractedSignal[]> {
+  availableAuthorRoles: string[],
+  contentAngles?: string[]
+): Promise<GeneratedSignal[]> {
+  const anglesHint = contentAngles?.length
+    ? `\nContent angles to focus on (use these as inspiration if relevant): ${contentAngles.join(", ")}.`
+    : "";
+  const authorHint = availableAuthorRoles.length
+    ? `\nAvailable author roles: ${availableAuthorRoles.join(", ")}. After each post, add exactly one line: RECOMMENDED_FOR: [role] — pick the role whose audience best fits the post.`
+    : "";
+
   const raw = await textCall({
-    maxTokens: 3000,
-    temperature: 0.4,
-    system: `${GLOBAL_RULES}
-
-STEP 1 — Signal Extraction:
-
-Extract ONLY high-value signals. A signal is valid ONLY if it includes at least one of:
-- Measurable result (%, $, time, growth)
-- Specific mistake or failure
-- Tactical insight (how something was done)
-- Real customer language
-- Decision-making reasoning
-
-Return ONLY valid JSON:
-{
-  "signals": [
-    {
-      "rawContent": "exact quote or precise summary with specific details",
-      "contentType": "success_metric | customer_quote | buying_signal | technical_insight | before_after | objection | lesson",
-      "speaker": "name or empty string",
-      "contentAngles": ["specific angle 1", "specific angle 2", "specific angle 3"],
-      "recommendedAuthorRole": "best matching role from available list"
-    }
-  ]
-}
+    maxTokens: 4000,
+    temperature: 0.7,
+    system: `You are an expert LinkedIn content strategist.${anglesHint}`,
+    user: `Convert the following meeting transcript into 1–3 HIGH-VALUE LinkedIn posts.
 
 Rules:
-- Maximum 5 signals
-- Each signal must be strong enough to become a standalone LinkedIn post
-- Skip anything weak — output an empty signals array if nothing qualifies`,
-    user: `Available author roles: ${availableAuthorRoles.join(", ")}
+- Extract only strong "signals" (metrics, mistakes, insights, contrarian opinions, real quotes)
+- Ignore generic or obvious content
+- Focus on what is specific, useful, or surprising
 
-Transcript:
-"""
+Each post MUST:
+- Be based on ONE clear idea
+- Include at least one concrete detail (number, mistake, or real example)
+- Deliver a clear takeaway
+- Use emojis sparingly and only when they add genuine energy (never decorative)
+
+Structure:
+1. Hook (scroll-stopping, 1–2 lines)
+2. Context (short)
+3. Insight / Story
+4. Proof (metric, example, or quote)
+5. Takeaway
+
+Style:
+- Short lines (LinkedIn style)
+- Human, not robotic
+- No fluff, no summaries
+- Make it worth saving
+
+Output format — use exactly this:
+POST 1:
+[post text]
+${availableAuthorRoles.length ? "RECOMMENDED_FOR: [role]\n" : ""}
+POST 2:
+[post text]
+${availableAuthorRoles.length ? "RECOMMENDED_FOR: [role]\n" : ""}
+(Only include posts that are truly valuable.)${authorHint}
+
+-------------------------------------
+TRANSCRIPT:
 ${transcript.slice(0, 40000)}
-"""
-
-Extract only signals strong enough for LinkedIn. Return JSON only.`,
+-------------------------------------`,
   });
-  const parsed = extractJson<{ signals: ExtractedSignal[] }>(raw);
-  return parsed.signals ?? [];
+
+  const parts = raw.split(/\bPOST \d+:/i).filter((p) => p.trim().length > 80);
+  return parts
+    .map((part) => {
+      const lines = part.trim().split("\n");
+      const recIdx = lines.findIndex((l) => /^RECOMMENDED_FOR:/i.test(l.trim()));
+      const recommendedAuthorRole =
+        recIdx !== -1
+          ? lines[recIdx].replace(/^RECOMMENDED_FOR:\s*/i, "").trim()
+          : undefined;
+      const content = lines
+        .filter((_, i) => i !== recIdx)
+        .join("\n")
+        .trim();
+      return { rawContent: content, recommendedAuthorRole };
+    })
+    .filter((p) => p.rawContent.length > 80);
 }
 
 /* ---------- post generation ---------- */

@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { timeAgo } from "@/lib/utils";
 import { FathomCard } from "./fathom-card";
+import { ContentAngles } from "./content-angles";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -41,6 +42,21 @@ export default async function AuthorDetailPage({ params }: { params: { id: strin
             isConnected={!!author.fathomAccessToken}
           />
         </Suspense>
+      </div>
+
+      <div className="mb-4">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Content angles</CardTitle>
+            <CardDescription>Topics this author focuses on. Used to guide post generation from transcripts.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ContentAngles
+              authorId={author.id}
+              initialAngles={(author.contentAngles as string[] | null) ?? []}
+            />
+          </CardContent>
+        </Card>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
