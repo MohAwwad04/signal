@@ -29,6 +29,13 @@ export default async function SignalDetailPage({ params }: { params: { id: strin
 
   if (!signal) notFound();
 
+  // Load transcript from dedicated table, fall back to legacy inline field
+  const transcriptText = signal.transcriptId
+    ? await db.select({ content: schema.transcripts.content }).from(schema.transcripts)
+        .where(eq(schema.transcripts.id, signal.transcriptId))
+        .then((r) => r[0]?.content ?? null)
+    : signal.sourceTranscript ?? null;
+
   // Auto-star best framework for existing signals that don't have one yet
   if (!signal.bestFrameworkId && frameworks.length > 0) {
     const bestFw =
@@ -232,8 +239,8 @@ export default async function SignalDetailPage({ params }: { params: { id: strin
             allAngles={allAngles}
           />
 
-          {signal.sourceTranscript && (
-            <TranscriptCard transcript={signal.sourceTranscript} />
+          {transcriptText && (
+            <TranscriptCard transcript={transcriptText} />
           )}
 
           <SignalStatsPanel

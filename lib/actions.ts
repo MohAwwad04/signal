@@ -34,6 +34,15 @@ export async function extractSignalsAction(
   );
   const generated = await generatePostsFromTranscript(transcript, roles, allAngles, voiceProfiles);
   if (!generated.length) return { inserted: 0, signals: [] };
+
+  // Store the raw transcript once, link all extracted signals to it
+  const [transcriptRow] = await db.insert(schema.transcripts).values({
+    title: meetingTitle ?? null,
+    content: transcript,
+    source: "manual",
+    sourceMeetingDate: meetingDate ? new Date(meetingDate) : null,
+  }).returning();
+
   const rows = generated.map((s) => {
     const recAuthor = s.recommendedAuthorRole
       ? authors.find((a) => a.role?.toLowerCase() === s.recommendedAuthorRole?.toLowerCase())
@@ -47,7 +56,7 @@ export async function extractSignalsAction(
       source: "manual" as const,
       sourceMeetingTitle: meetingTitle ?? null,
       sourceMeetingDate: meetingDate ? new Date(meetingDate) : null,
-      sourceTranscript: transcript,
+      transcriptId: transcriptRow.id,
       sourceExcerpt: s.sourceExcerpt ?? null,
     };
   });

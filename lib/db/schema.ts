@@ -27,6 +27,17 @@ export const postStatus = pgEnum("post_status", [
   "published",
 ]);
 
+/** Raw meeting transcript, source of truth for signal extraction. */
+export const transcripts = pgTable("transcripts", {
+  id: serial("id").primaryKey(),
+  title: text("title"),
+  content: text("content").notNull(),
+  source: varchar("source", { length: 64 }).default("manual").notNull(),
+  sourceMeetingId: varchar("source_meeting_id", { length: 128 }),
+  sourceMeetingDate: timestamp("source_meeting_date"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 /** A piece of raw content captured from a meeting that could become a post. */
 export const signals = pgTable("signals", {
   id: serial("id").primaryKey(),
@@ -43,6 +54,7 @@ export const signals = pgTable("signals", {
   bestFrameworkId: integer("best_framework_id"),
   sourceTranscript: text("source_transcript"),
   sourceExcerpt: text("source_excerpt"),
+  transcriptId: integer("transcript_id").references(() => transcripts.id, { onDelete: "set null" }),
   hookStrengthScore: integer("hook_strength_score"),
   specificityScore: integer("specificity_score"),
   clarityScore: integer("clarity_score"),
@@ -211,6 +223,7 @@ export const oauthStates = pgTable("oauth_states", {
   stateIdx: uniqueIndex("oauth_states_state_idx").on(t.state),
 }));
 
+export type Transcript = typeof transcripts.$inferSelect;
 export type Signal = typeof signals.$inferSelect;
 export type Author = typeof authors.$inferSelect;
 export type Framework = typeof frameworks.$inferSelect;
