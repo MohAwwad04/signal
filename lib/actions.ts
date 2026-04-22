@@ -147,6 +147,17 @@ export async function createSignalAction(input: {
   return { ...row, ...patch };
 }
 
+export async function scoreSignalAction(id: number) {
+  const [signal] = await db.select().from(schema.signals).where(eq(schema.signals.id, id));
+  if (!signal) throw new Error("Signal not found.");
+  const scores = await scorePost(signal.rawContent);
+  await db.update(schema.signals)
+    .set({ hookStrengthScore: scores.hookStrength, specificityScore: scores.specificity } as any)
+    .where(eq(schema.signals.id, id));
+  revalidatePath(`/signals/${id}`);
+  return scores;
+}
+
 export async function updateSignalAuthorAction(id: number, authorId: number | null) {
   await db.update(schema.signals).set({ recommendedAuthorId: authorId }).where(eq(schema.signals.id, id));
   revalidatePath(`/signals/${id}`);

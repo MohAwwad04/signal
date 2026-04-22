@@ -25,6 +25,17 @@ export default async function SignalDetailPage({ params }: { params: { id: strin
 
   if (!signal) notFound();
 
+  // Auto-star best framework for existing signals that don't have one yet
+  if (!signal.bestFrameworkId && frameworks.length > 0) {
+    const bestFw =
+      frameworks.find((f) => ((f.bestFor as string[] | null) ?? []).includes(signal.contentType ?? "")) ??
+      frameworks[0];
+    if (bestFw) {
+      await db.update(schema.signals).set({ bestFrameworkId: bestFw.id }).where(eq(schema.signals.id, id));
+      signal.bestFrameworkId = bestFw.id;
+    }
+  }
+
   const author = signal.recommendedAuthorId
     ? allAuthors.find((a) => a.id === signal.recommendedAuthorId) ?? null
     : null;
@@ -207,6 +218,7 @@ export default async function SignalDetailPage({ params }: { params: { id: strin
           )}
 
           <SignalStatsPanel
+            signalId={signal.id}
             hookStrength={signal.hookStrengthScore ?? bestPost?.hookStrengthScore ?? null}
             specificity={signal.specificityScore ?? bestPost?.specificityScore ?? null}
             analytics={totalAnalytics}

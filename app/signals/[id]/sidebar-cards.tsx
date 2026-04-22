@@ -9,9 +9,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   updateSignalAuthorAction,
   updateSignalContentAnglesAction,
+  scoreSignalAction,
 } from "@/lib/actions";
 import { toast } from "@/components/ui/toaster";
-import { User, Tag, FileText, BarChart2, ChevronDown, ChevronUp, Check, X, Plus, Star } from "lucide-react";
+import { User, Tag, FileText, BarChart2, ChevronDown, ChevronUp, Check, X, Plus, Star, Loader2, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type Author = { id: number; name: string; role: string | null };
@@ -278,19 +279,35 @@ export function TranscriptCard({ transcript }: { transcript: string }) {
 
 /* ─── Stats Panel ─── */
 export function SignalStatsPanel({
+  signalId,
   hookStrength,
   specificity,
   analytics,
   postCount,
 }: {
+  signalId: number;
   hookStrength: number | null;
   specificity: number | null;
   analytics: { impressions: number; likes: number; comments: number; shares: number };
   postCount: number;
 }) {
+  const router = useRouter();
+  const [scoring, setScoring] = useState(false);
   const hasScores = hookStrength !== null || specificity !== null;
   const hasAnalytics = analytics.impressions > 0 || analytics.likes > 0 || analytics.comments > 0 || analytics.shares > 0;
   const maxStat = Math.max(analytics.impressions, analytics.likes, analytics.comments, analytics.shares, 1);
+
+  async function score() {
+    setScoring(true);
+    try {
+      await scoreSignalAction(signalId);
+      router.refresh();
+    } catch {
+      toast({ title: "Scoring failed", kind: "error" });
+    } finally {
+      setScoring(false);
+    }
+  }
 
   return (
     <Card>
@@ -303,7 +320,13 @@ export function SignalStatsPanel({
       </CardHeader>
       <CardContent className="space-y-4">
         {!hasScores && (
-          <p className="text-xs text-muted-foreground italic">Scoring runs automatically on extraction. For older signals, generate a post to see scores.</p>
+          <div className="space-y-2">
+            <p className="text-xs text-muted-foreground italic">No quality scores yet.</p>
+            <Button size="sm" variant="outline" onClick={score} disabled={scoring} className="h-7 w-full text-xs gap-1.5">
+              {scoring ? <Loader2 className="h-3 w-3 animate-spin" /> : <Zap className="h-3 w-3 text-amber-500" />}
+              {scoring ? "Scoring…" : "Score this signal"}
+            </Button>
+          </div>
         )}
 
         {hasScores && (
