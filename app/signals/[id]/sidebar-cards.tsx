@@ -282,18 +282,24 @@ export function SignalStatsPanel({
   signalId,
   hookStrength,
   specificity,
+  clarity,
+  emotionalResonance,
+  callToAction,
   analytics,
   postCount,
 }: {
   signalId: number;
   hookStrength: number | null;
   specificity: number | null;
+  clarity: number | null;
+  emotionalResonance: number | null;
+  callToAction: number | null;
   analytics: { impressions: number; likes: number; comments: number; shares: number };
   postCount: number;
 }) {
   const router = useRouter();
   const [scoring, setScoring] = useState(false);
-  const hasScores = hookStrength !== null || specificity !== null;
+  const hasScores = hookStrength !== null;
   const hasAnalytics = analytics.impressions > 0 || analytics.likes > 0 || analytics.comments > 0 || analytics.shares > 0;
   const maxStat = Math.max(analytics.impressions, analytics.likes, analytics.comments, analytics.shares, 1);
 
@@ -321,10 +327,10 @@ export function SignalStatsPanel({
       <CardContent className="space-y-4">
         {!hasScores && (
           <div className="space-y-2">
-            <p className="text-xs text-muted-foreground italic">No quality scores yet.</p>
+            <p className="text-xs text-muted-foreground italic">Scoring…</p>
             <Button size="sm" variant="outline" onClick={score} disabled={scoring} className="h-7 w-full text-xs gap-1.5">
               {scoring ? <Loader2 className="h-3 w-3 animate-spin" /> : <Zap className="h-3 w-3 text-amber-500" />}
-              {scoring ? "Scoring…" : "Score this signal"}
+              {scoring ? "Scoring…" : "Score now"}
             </Button>
           </div>
         )}
@@ -333,6 +339,9 @@ export function SignalStatsPanel({
           <div className="space-y-3">
             <QualityBar label="Hook strength" value={hookStrength ?? 0} />
             <QualityBar label="Specificity" value={specificity ?? 0} />
+            <QualityBar label="Clarity" value={clarity ?? 0} />
+            <QualityBar label="Emotional resonance" value={emotionalResonance ?? 0} />
+            <QualityBar label="Call to action" value={callToAction ?? 0} />
           </div>
         )}
 

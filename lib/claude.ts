@@ -270,28 +270,45 @@ Return the edited post only.`,
 export async function scorePost(text: string): Promise<{
   hookStrength: number;
   specificity: number;
+  clarity: number;
+  emotionalResonance: number;
+  callToAction: number;
   notes: string;
 }> {
   const raw = await textCall({
-    maxTokens: 500,
+    maxTokens: 600,
     temperature: 0.2,
     system: `${GLOBAL_RULES}
 
 STEP 3 — Post Scoring:
 
-Score on two dimensions:
-- hook_strength (0-100): Do the first 1-2 lines stop a scroll? Specific, surprising, tension-inducing = high. Generic, corporate, vague = low.
-- specificity (0-100): Does the post use concrete numbers, names, moments? Abstraction soup = low.
+Score on five LinkedIn-specific dimensions (0-100 each):
+- hook_strength: Do the first 1-2 lines stop a scroll? Specific, surprising, tension-inducing = high. Generic, corporate, vague = low.
+- specificity: Does the post use concrete numbers, names, moments? Abstraction soup = low.
+- clarity: Is the message immediately clear? No jargon, no ambiguity, reader knows exactly what the point is = high.
+- emotional_resonance: Does it stir curiosity, empathy, inspiration, or recognition in the reader? Flat and transactional = low.
+- call_to_action: Does it compel the reader to engage (comment, share, reflect, act)? Explicit or implicit CTA, strong close = high. Post that just ends = low.
 
-Be critical, not nice. Penalize vagueness heavily. Reward specificity and originality.
+Be critical, not nice. Penalize vagueness heavily.
 
-Return ONLY valid JSON: { "hook_strength": <int>, "specificity": <int>, "notes": "one short sentence of feedback" }`,
+Return ONLY valid JSON: { "hook_strength": <int>, "specificity": <int>, "clarity": <int>, "emotional_resonance": <int>, "call_to_action": <int>, "notes": "one short sentence of feedback" }`,
     user: `Post:\n"""${text}"""`,
   });
-  const parsed = extractJson<{ hook_strength: number; specificity: number; notes: string }>(raw);
+  const parsed = extractJson<{
+    hook_strength: number;
+    specificity: number;
+    clarity: number;
+    emotional_resonance: number;
+    call_to_action: number;
+    notes: string;
+  }>(raw);
+  const clamp = (v: number | undefined) => Math.max(0, Math.min(100, v ?? 0));
   return {
-    hookStrength: Math.max(0, Math.min(100, parsed.hook_strength ?? 0)),
-    specificity: Math.max(0, Math.min(100, parsed.specificity ?? 0)),
+    hookStrength: clamp(parsed.hook_strength),
+    specificity: clamp(parsed.specificity),
+    clarity: clamp(parsed.clarity),
+    emotionalResonance: clamp(parsed.emotional_resonance),
+    callToAction: clamp(parsed.call_to_action),
     notes: parsed.notes ?? "",
   };
 }

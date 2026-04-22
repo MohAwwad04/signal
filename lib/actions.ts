@@ -61,7 +61,13 @@ export async function extractSignalsAction(
       const scores = await scorePost(signal.rawContent).catch(() => null);
       const patch: Record<string, unknown> = {};
       if (bestFw) patch.bestFrameworkId = bestFw.id;
-      if (scores) { patch.hookStrengthScore = scores.hookStrength; patch.specificityScore = scores.specificity; }
+      if (scores) {
+        patch.hookStrengthScore = scores.hookStrength;
+        patch.specificityScore = scores.specificity;
+        patch.clarityScore = scores.clarity;
+        patch.emotionalResonanceScore = scores.emotionalResonance;
+        patch.callToActionScore = scores.callToAction;
+      }
       if (Object.keys(patch).length) {
         await db.update(schema.signals).set(patch as any).where(eq(schema.signals.id, signal.id));
       }
@@ -138,7 +144,13 @@ export async function createSignalAction(input: {
     null;
   const patch: Record<string, unknown> = {};
   if (bestFw) patch.bestFrameworkId = bestFw.id;
-  if (scores) { patch.hookStrengthScore = scores.hookStrength; patch.specificityScore = scores.specificity; }
+  if (scores) {
+    patch.hookStrengthScore = scores.hookStrength;
+    patch.specificityScore = scores.specificity;
+    patch.clarityScore = scores.clarity;
+    patch.emotionalResonanceScore = scores.emotionalResonance;
+    patch.callToActionScore = scores.callToAction;
+  }
   if (Object.keys(patch).length) {
     await db.update(schema.signals).set(patch as any).where(eq(schema.signals.id, row.id));
   }
@@ -152,7 +164,13 @@ export async function scoreSignalAction(id: number) {
   if (!signal) throw new Error("Signal not found.");
   const scores = await scorePost(signal.rawContent);
   await db.update(schema.signals)
-    .set({ hookStrengthScore: scores.hookStrength, specificityScore: scores.specificity } as any)
+    .set({
+      hookStrengthScore: scores.hookStrength,
+      specificityScore: scores.specificity,
+      clarityScore: scores.clarity,
+      emotionalResonanceScore: scores.emotionalResonance,
+      callToActionScore: scores.callToAction,
+    } as any)
     .where(eq(schema.signals.id, id));
   revalidatePath(`/signals/${id}`);
   return scores;
@@ -397,13 +415,15 @@ export async function generatePostAction(input: {
   };
 
   let text = await generatePost(postInput);
-  let scores = await scorePost(text).catch(() => ({ hookStrength: 0, specificity: 0, notes: "" }));
+  const defaultScores = { hookStrength: 0, specificity: 0, clarity: 0, emotionalResonance: 0, callToAction: 0, notes: "" };
+  let scores = await scorePost(text).catch(() => defaultScores);
 
+  const totalScore = (s: typeof scores) => s.hookStrength + s.specificity + s.clarity + s.emotionalResonance + s.callToAction;
   if (scores.hookStrength < 45 || scores.specificity < 45) {
     const retry = await generatePost(postInput).catch(() => null);
     if (retry) {
       const retryScores = await scorePost(retry).catch(() => null);
-      if (retryScores && (retryScores.hookStrength + retryScores.specificity) > (scores.hookStrength + scores.specificity)) {
+      if (retryScores && totalScore(retryScores) > totalScore(scores)) {
         text = retry;
         scores = retryScores;
       }
@@ -421,8 +441,11 @@ export async function generatePostAction(input: {
       originalContent: text,
       hookStrengthScore: scores.hookStrength,
       specificityScore: scores.specificity,
+      clarityScore: scores.clarity,
+      emotionalResonanceScore: scores.emotionalResonance,
+      callToActionScore: scores.callToAction,
       status: "draft",
-    })
+    } as any)
     .returning();
 
   await db.update(schema.signals).set({ status: "drafting" }).where(eq(schema.signals.id, input.signalId));
@@ -457,7 +480,13 @@ export async function updatePostContentAction(postId: number, newContent: string
   if (scores) {
     await db
       .update(schema.posts)
-      .set({ hookStrengthScore: scores.hookStrength, specificityScore: scores.specificity })
+      .set({
+        hookStrengthScore: scores.hookStrength,
+        specificityScore: scores.specificity,
+        clarityScore: scores.clarity,
+        emotionalResonanceScore: scores.emotionalResonance,
+        callToActionScore: scores.callToAction,
+      } as any)
       .where(eq(schema.posts.id, postId));
   }
 

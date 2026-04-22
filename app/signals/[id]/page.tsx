@@ -36,6 +36,26 @@ export default async function SignalDetailPage({ params }: { params: { id: strin
     }
   }
 
+  // Auto-score existing signals that haven't been scored yet
+  if (signal.hookStrengthScore == null) {
+    const { scorePost } = await import("@/lib/claude");
+    const scores = await scorePost(signal.rawContent).catch(() => null);
+    if (scores) {
+      await db.update(schema.signals).set({
+        hookStrengthScore: scores.hookStrength,
+        specificityScore: scores.specificity,
+        clarityScore: scores.clarity,
+        emotionalResonanceScore: scores.emotionalResonance,
+        callToActionScore: scores.callToAction,
+      } as any).where(eq(schema.signals.id, id));
+      signal.hookStrengthScore = scores.hookStrength;
+      (signal as any).specificityScore = scores.specificity;
+      (signal as any).clarityScore = scores.clarity;
+      (signal as any).emotionalResonanceScore = scores.emotionalResonance;
+      (signal as any).callToActionScore = scores.callToAction;
+    }
+  }
+
   const author = signal.recommendedAuthorId
     ? allAuthors.find((a) => a.id === signal.recommendedAuthorId) ?? null
     : null;
@@ -220,7 +240,10 @@ export default async function SignalDetailPage({ params }: { params: { id: strin
           <SignalStatsPanel
             signalId={signal.id}
             hookStrength={signal.hookStrengthScore ?? bestPost?.hookStrengthScore ?? null}
-            specificity={signal.specificityScore ?? bestPost?.specificityScore ?? null}
+            specificity={(signal as any).specificityScore ?? bestPost?.specificityScore ?? null}
+            clarity={(signal as any).clarityScore ?? (bestPost as any)?.clarityScore ?? null}
+            emotionalResonance={(signal as any).emotionalResonanceScore ?? (bestPost as any)?.emotionalResonanceScore ?? null}
+            callToAction={(signal as any).callToActionScore ?? (bestPost as any)?.callToActionScore ?? null}
             analytics={totalAnalytics}
             postCount={signalPosts.length}
           />
