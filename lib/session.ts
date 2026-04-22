@@ -2,7 +2,7 @@ import { cookies } from "next/headers";
 import { db, schema } from "@/lib/db";
 import { eq } from "drizzle-orm";
 
-const SUPERADMIN_EMAIL = "moh.awwad243@gmail.com";
+const SUPERADMIN_EMAIL = "moh.awwad.243@gmail.com";
 
 export type SessionUser = {
   email: string;
