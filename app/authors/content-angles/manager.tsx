@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -21,7 +20,6 @@ export function ContentAnglesManager({
   authorMap: Record<number, string>;
   allAuthors: Author[];
 }) {
-  const router = useRouter();
   const [angles, setAngles] = useState(initialAngles);
   const [newName, setNewName] = useState("");
   const [creating, setCreating] = useState(false);
@@ -34,10 +32,14 @@ export function ContentAnglesManager({
     if (!trimmed) return;
     setCreating(true);
     try {
-      await createContentAngleAction(trimmed);
+      const created = await createContentAngleAction(trimmed);
+      setAngles((prev) =>
+        prev.some((a) => a.id === created.id)
+          ? prev
+          : [...prev, { id: created.id, name: created.name, authorIds: [] }]
+      );
       setNewName("");
       toast({ title: `"${trimmed}" created`, kind: "success" });
-      router.refresh();
     } catch (e: any) {
       toast({ title: "Failed", description: e.message, kind: "error" });
     } finally {
@@ -63,8 +65,14 @@ export function ContentAnglesManager({
     setLinkingAuthorId(authorId);
     try {
       await addContentAngleToAuthorAction(authorId, angleId);
+      setAngles((prev) =>
+        prev.map((a) =>
+          a.id === angleId && !a.authorIds.includes(authorId)
+            ? { ...a, authorIds: [...a.authorIds, authorId] }
+            : a
+        )
+      );
       toast({ title: "Angle added to author", kind: "success" });
-      router.refresh();
     } catch (e: any) {
       toast({ title: "Failed", description: e.message, kind: "error" });
     } finally {
