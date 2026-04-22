@@ -708,9 +708,21 @@ export async function getDashboardStats() {
 
 /* ========== LINKEDIN PROFILE ANALYSIS ========== */
 
+const LINKEDIN_BLOCK_PHRASES = [
+  "Sign in to LinkedIn",
+  "authwall",
+  "Join now to see",
+  "Join to see",
+  "Profile data unavailable",
+  "This profile is not available",
+  "to view full profiles",
+  "Sign in or Join",
+  "Be the first to",
+  "Create a free account",
+];
+
 async function fetchLinkedinPageText(url: string): Promise<string | null> {
   const normalized = url.startsWith("http") ? url : `https://${url}`;
-  // Jina Reader converts any page to clean LLM-readable text
   const jinaUrl = `https://r.jina.ai/${normalized}`;
   try {
     const res = await fetch(jinaUrl, {
@@ -719,8 +731,8 @@ async function fetchLinkedinPageText(url: string): Promise<string | null> {
     });
     if (!res.ok) return null;
     const text = await res.text();
-    // If Jina returned a LinkedIn login wall, bail out
-    if (text.includes("Sign in to LinkedIn") || text.includes("authwall") || text.length < 200) return null;
+    if (text.length < 500) return null;
+    if (LINKEDIN_BLOCK_PHRASES.some((p) => text.includes(p))) return null;
     return text;
   } catch {
     return null;
@@ -747,8 +759,11 @@ async function applyAnalysis(
   if (Object.keys(patch).length > 0) {
     await db.update(schema.authors).set(patch as any).where(eq(schema.authors.id, authorId));
   }
-  if (analysis.contentAngles.length > 0) {
-    await updateAuthorContentAnglesAction(authorId, analysis.contentAngles);
+  const validAngles = analysis.contentAngles.filter(
+    (a) => a.length <= 60 && !LINKEDIN_BLOCK_PHRASES.some((p) => a.toLowerCase().includes(p.toLowerCase()))
+  );
+  if (validAngles.length > 0) {
+    await updateAuthorContentAnglesAction(authorId, validAngles);
   }
   revalidatePath(`/authors/${authorId}`);
   return "Profile updated from LinkedIn — content angles, frameworks, voice, and style notes filled in.";
