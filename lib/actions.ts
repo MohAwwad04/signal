@@ -768,7 +768,7 @@ export async function scrapeLinkedinProfileAction(authorId: number): Promise<{ o
     if (!author.linkedinUrl && author.linkedinAccessToken) {
       try {
         const token = await getValidLinkedinToken(authorId);
-        const vanityName = await fetchLinkedinVanityName(token);
+        const vanityName = await fetchLinkedinVanityName(token, author.linkedinMemberId);
         if (vanityName) {
           const linkedinUrl = `https://www.linkedin.com/in/${vanityName}`;
           await db.update(schema.authors).set({ linkedinUrl }).where(eq(schema.authors.id, authorId));

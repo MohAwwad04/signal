@@ -62,13 +62,11 @@ export async function GET(req: NextRequest) {
   const tokens = await tokenRes.json();
   const expiresAt = new Date(Date.now() + (tokens.expires_in ?? 3600) * 1000);
 
-  const [profile, vanityName] = await Promise.all([
-    fetchLinkedinProfile(tokens.access_token).catch((e) => {
-      console.error("[linkedin-callback] fetchLinkedinProfile failed:", e);
-      return { id: "", name: "" };
-    }),
-    fetchLinkedinVanityName(tokens.access_token).catch(() => null),
-  ]);
+  const profile = await fetchLinkedinProfile(tokens.access_token).catch((e) => {
+    console.error("[linkedin-callback] fetchLinkedinProfile failed:", e);
+    return { id: "", name: "" };
+  });
+  const vanityName = await fetchLinkedinVanityName(tokens.access_token, profile.id).catch(() => null);
 
   const linkedinUrl = vanityName ? `https://www.linkedin.com/in/${vanityName}` : undefined;
 

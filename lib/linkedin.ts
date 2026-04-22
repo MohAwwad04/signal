@@ -80,25 +80,48 @@ export async function fetchLinkedinProfile(accessToken: string): Promise<{ id: s
   return { id: data.sub ?? "", name: data.name ?? "" };
 }
 
+function extractVanityFromUrl(url: string): string | null {
+  const m = url.match(/linkedin\.com\/in\/([^/?#]+)/i);
+  return m ? m[1] : null;
+}
+
 /**
- * Fetch the LinkedIn vanity name (profile URL slug).
- * Tries /v2/me with and without projection — returns null if neither works.
+ * Resolve the LinkedIn profile vanity name using all available signals.
+ * Tries multiple endpoints and fields so it works across different scope levels.
  */
-export async function fetchLinkedinVanityName(accessToken: string): Promise<string | null> {
+export async function fetchLinkedinVanityName(accessToken: string, memberId?: string | null): Promise<string | null> {
   const headers = { Authorization: `Bearer ${accessToken}` };
 
-  // Try with projection first
-  const r1 = await fetch(`${LINKEDIN_API_BASE}/v2/me?projection=(id,vanityName)`, { headers });
-  if (r1.ok) {
+  // 1. /v2/me with projection
+  const r1 = await fetch(`${LINKEDIN_API_BASE}/v2/me?projection=(id,vanityName,publicProfileUrl)`, { headers }).catch(() => null);
+  if (r1?.ok) {
     const d = await r1.json();
     if (d.vanityName) return d.vanityName;
+    if (d.publicProfileUrl) { const v = extractVanityFromUrl(d.publicProfileUrl); if (v) return v; }
   }
 
-  // Fall back to full /v2/me response (returns all accessible fields)
-  const r2 = await fetch(`${LINKEDIN_API_BASE}/v2/me`, { headers });
-  if (!r2.ok) return null;
-  const d2 = await r2.json();
-  return d2.vanityName ?? null;
+  // 2. /v2/me without projection (returns all accessible fields)
+  const r2 = await fetch(`${LINKEDIN_API_BASE}/v2/me`, { headers }).catch(() => null);
+  if (r2?.ok) {
+    const d = await r2.json();
+    if (d.vanityName) return d.vanityName;
+    if (d.publicProfileUrl) { const v = extractVanityFromUrl(d.publicProfileUrl); if (v) return v; }
+  }
+
+  // 3. /v2/people/(id:{memberId}) — uses the stored member ID
+  if (memberId) {
+    const r3 = await fetch(
+      `${LINKEDIN_API_BASE}/v2/people/(id:${encodeURIComponent(memberId)})?projection=(id,vanityName,publicProfileUrl)`,
+      { headers }
+    ).catch(() => null);
+    if (r3?.ok) {
+      const d = await r3.json();
+      if (d.vanityName) return d.vanityName;
+      if (d.publicProfileUrl) { const v = extractVanityFromUrl(d.publicProfileUrl); if (v) return v; }
+    }
+  }
+
+  return null;
 }
 
 /**
