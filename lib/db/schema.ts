@@ -94,6 +94,12 @@ export const authors = pgTable("authors", {
   linkedinMemberName: varchar("linkedin_member_name", { length: 256 }),
   linkedinConnectedAt: timestamp("linkedin_connected_at"),
   linkedinLastSyncedAt: timestamp("linkedin_last_synced_at"),
+  googleAccessToken: text("google_access_token"),
+  googleRefreshToken: text("google_refresh_token"),
+  googleTokenExpiresAt: timestamp("google_token_expires_at"),
+  googleUserEmail: varchar("google_user_email", { length: 256 }),
+  googleConnectedAt: timestamp("google_connected_at"),
+  googleLastSyncedAt: timestamp("google_last_synced_at"),
 });
 
 /** Global pool of named content angles, independent of any author. */

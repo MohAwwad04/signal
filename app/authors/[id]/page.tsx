@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { timeAgo } from "@/lib/utils";
 import { FathomCard } from "./fathom-card";
 import { LinkedInCard } from "./linkedin-card";
+import { GoogleDriveCard } from "./google-drive-card";
 import { ContentAngles } from "./content-angles";
 import { LinkedinUrlEditor } from "./linkedin-url-editor";
 import { ArrowUpRight, User } from "lucide-react";
@@ -80,6 +81,15 @@ export default async function AuthorDetailPage({ params }: { params: { id: strin
             linkedinLastSyncedAt={author.linkedinLastSyncedAt}
             isConnected={!!author.linkedinAccessToken}
             linkedinUrl={author.linkedinUrl ?? null}
+          />
+        </Suspense>
+        <Suspense>
+          <GoogleDriveCard
+            authorId={author.id}
+            googleUserEmail={author.googleUserEmail ?? null}
+            googleConnectedAt={author.googleConnectedAt ?? null}
+            googleLastSyncedAt={author.googleLastSyncedAt ?? null}
+            isConnected={!!author.googleAccessToken}
           />
         </Suspense>
       </div>
