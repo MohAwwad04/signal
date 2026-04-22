@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import { timeAgo } from "@/lib/utils";
 import { ArrowLeft, Radio, ArrowUpRight } from "lucide-react";
 import { PostEditor } from "./post-editor";
-import { SignalGenerateForm } from "./generate-form";
 import { AuthorCard, SignalAnglesCard, TranscriptCard, SignalStatsPanel, SourceExcerptCard } from "./sidebar-cards";
 import { ScoresProvider } from "./scores-provider";
 
@@ -114,13 +113,6 @@ export default async function SignalDetailPage({ params }: { params: { id: strin
     : [];
   const allAngleNames = Array.from(new Set([...signalAngles, ...authorAngles, ...allAngles.map((a) => a.name)]));
 
-  const frameworksForForm = frameworks.map((f) => ({
-    id: f.id,
-    name: f.name,
-    description: f.description,
-    bestFor: (f.bestFor as string[] | null) ?? [],
-  }));
-
   const frameworksForEditor = frameworks.map((f) => ({
     id: f.id,
     name: f.name,
@@ -179,18 +171,10 @@ export default async function SignalDetailPage({ params }: { params: { id: strin
             signalId={signal.id}
             initialContent={signal.rawContent}
             authorName={author?.name ?? null}
+            authorId={signal.recommendedAuthorId ?? null}
             frameworks={frameworksForEditor}
             bestFrameworkId={signal.bestFrameworkId ?? null}
-          />
-
-          <SignalGenerateForm
-            signalId={signal.id}
             contentAngles={allAngleNames}
-            recommendedAuthorId={signal.recommendedAuthorId ?? null}
-            authors={allAuthors}
-            frameworks={frameworksForForm}
-            contentType={signal.contentType}
-            bestFrameworkId={signal.bestFrameworkId ?? null}
           />
 
           {signalPosts.length > 0 && (
