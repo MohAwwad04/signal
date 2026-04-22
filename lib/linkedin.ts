@@ -81,17 +81,24 @@ export async function fetchLinkedinProfile(accessToken: string): Promise<{ id: s
 }
 
 /**
- * Fetch the LinkedIn vanity name (profile URL slug) via /v2/me.
- * Returns null if the endpoint is not accessible with current scopes.
+ * Fetch the LinkedIn vanity name (profile URL slug).
+ * Tries /v2/me with and without projection — returns null if neither works.
  */
 export async function fetchLinkedinVanityName(accessToken: string): Promise<string | null> {
-  const res = await fetch(
-    `${LINKEDIN_API_BASE}/v2/me?projection=(id,vanityName)`,
-    { headers: { Authorization: `Bearer ${accessToken}` } }
-  );
-  if (!res.ok) return null;
-  const data = await res.json();
-  return data.vanityName ?? null;
+  const headers = { Authorization: `Bearer ${accessToken}` };
+
+  // Try with projection first
+  const r1 = await fetch(`${LINKEDIN_API_BASE}/v2/me?projection=(id,vanityName)`, { headers });
+  if (r1.ok) {
+    const d = await r1.json();
+    if (d.vanityName) return d.vanityName;
+  }
+
+  // Fall back to full /v2/me response (returns all accessible fields)
+  const r2 = await fetch(`${LINKEDIN_API_BASE}/v2/me`, { headers });
+  if (!r2.ok) return null;
+  const d2 = await r2.json();
+  return d2.vanityName ?? null;
 }
 
 /**

@@ -99,8 +99,10 @@ export function LinkedInCard({
       <Button size="sm" variant="secondary" onClick={handleScrape} disabled={scraping}>
         {scraping ? "Reading LinkedIn…" : "Auto-fill from LinkedIn"}
       </Button>
-      {!linkedinUrl && !isConnected && (
-        <p className="text-xs text-amber-500">Add a LinkedIn URL in the profile header, or connect LinkedIn to enable this.</p>
+      {!linkedinUrl && (
+        <p className="text-xs text-amber-500">
+          No LinkedIn URL detected yet — add it in the profile header above, then click Auto-fill.
+        </p>
       )}
     </div>
   );
