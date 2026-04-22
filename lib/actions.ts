@@ -740,19 +740,14 @@ async function applyAnalysis(
     .filter((id): id is number => id !== undefined);
 
   const patch: Record<string, unknown> = {};
-  if (!author.voiceProfile && analysis.voiceProfile) patch.voiceProfile = analysis.voiceProfile;
-  if (!author.styleNotes && analysis.styleNotes) patch.styleNotes = analysis.styleNotes;
-  if ((!author.contentAngles || (author.contentAngles as string[]).length === 0) && analysis.contentAngles.length > 0) {
-    patch.contentAngles = analysis.contentAngles;
-  }
-  if ((!author.preferredFrameworks || (author.preferredFrameworks as number[]).length === 0) && preferredIds.length > 0) {
-    patch.preferredFrameworks = preferredIds;
-  }
+  if (analysis.voiceProfile) patch.voiceProfile = analysis.voiceProfile;
+  if (analysis.styleNotes) patch.styleNotes = analysis.styleNotes;
+  if (preferredIds.length > 0) patch.preferredFrameworks = preferredIds;
 
   if (Object.keys(patch).length > 0) {
     await db.update(schema.authors).set(patch as any).where(eq(schema.authors.id, authorId));
   }
-  if (patch.contentAngles) {
+  if (analysis.contentAngles.length > 0) {
     await updateAuthorContentAnglesAction(authorId, analysis.contentAngles);
   }
   revalidatePath(`/authors/${authorId}`);
