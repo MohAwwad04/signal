@@ -3,7 +3,7 @@ import { db, schema } from "@/lib/db";
 import { desc } from "drizzle-orm";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Users, ArrowUpRight } from "lucide-react";
+import { Plus, Users, ArrowUpRight, Tag } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -23,12 +23,20 @@ export default async function AuthorsPage() {
             People we write in the voice of. Voice profiles learn from edits automatically.
           </p>
         </div>
-        <Link href="/authors/new">
-          <Button>
-            <Plus className="h-4 w-4" />
-            New author
-          </Button>
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link href="/authors/content-angles">
+            <Button variant="outline">
+              <Tag className="h-4 w-4" />
+              Content angles
+            </Button>
+          </Link>
+          <Link href="/authors/new">
+            <Button>
+              <Plus className="h-4 w-4" />
+              New author
+            </Button>
+          </Link>
+        </div>
       </header>
 
       {authors.length === 0 ? (
@@ -44,25 +52,40 @@ export default async function AuthorsPage() {
         </div>
       ) : (
         <div className="grid gap-3 md:grid-cols-2">
-          {authors.map((a) => (
-            <Link
-              key={a.id}
-              href={`/authors/${a.id}`}
-              className="group flex items-start justify-between gap-4 rounded-2xl border border-border bg-card p-5 transition-all duration-200 hover:border-cyan-400/30 hover:shadow-glow-sm hover:-translate-y-0.5"
-            >
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="font-semibold">{a.name}</span>
-                  {!a.active && <Badge variant="secondary">Inactive</Badge>}
+          {authors.map((a) => {
+            const angles = (a.contentAngles as string[] | null) ?? [];
+            return (
+              <Link
+                key={a.id}
+                href={`/authors/${a.id}`}
+                className="group flex items-start justify-between gap-4 rounded-2xl border border-border bg-card p-5 transition-all duration-200 hover:border-cyan-400/30 hover:shadow-glow-sm hover:-translate-y-0.5"
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="font-semibold">{a.name}</span>
+                    {!a.active && <Badge variant="secondary">Inactive</Badge>}
+                  </div>
+                  {a.role && <p className="text-xs text-muted-foreground mb-2">{a.role}</p>}
+                  {angles.length > 0 && (
+                    <div className="mb-2 flex flex-wrap gap-1">
+                      {angles.slice(0, 3).map((angle) => (
+                        <span key={angle} className="rounded-full bg-purple-500/8 px-2 py-0.5 text-[10px] font-medium text-purple-600 dark:text-purple-400">
+                          {angle}
+                        </span>
+                      ))}
+                      {angles.length > 3 && (
+                        <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">+{angles.length - 3}</span>
+                      )}
+                    </div>
+                  )}
+                  <p className="line-clamp-2 text-xs text-muted-foreground">
+                    {a.voiceProfile ? a.voiceProfile.slice(0, 220) : (a.bio ?? "No voice profile yet — it'll build up from edits.")}
+                  </p>
                 </div>
-                {a.role && <p className="text-xs text-muted-foreground mb-2">{a.role}</p>}
-                <p className="line-clamp-2 text-xs text-muted-foreground">
-                  {a.voiceProfile ? a.voiceProfile.slice(0, 220) : (a.bio ?? "No voice profile yet — it'll build up from edits.")}
-                </p>
-              </div>
-              <ArrowUpRight className="h-4 w-4 shrink-0 text-muted-foreground/30 transition-all duration-200 group-hover:text-cyan-500 group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
-            </Link>
-          ))}
+                <ArrowUpRight className="h-4 w-4 shrink-0 text-muted-foreground/30 transition-all duration-200 group-hover:text-cyan-500 group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+              </Link>
+            );
+          })}
         </div>
       )}
     </div>

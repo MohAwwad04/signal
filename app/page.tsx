@@ -89,8 +89,8 @@ export default async function DashboardPage() {
           {/* Stats grid */}
           <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
             <Stat icon={<Radio     className="h-4 w-4" />} label="Unused signals" value={stats.unused}    href="/signals"          color="blue" />
-            <Stat icon={<FileEdit  className="h-4 w-4" />} label="Drafts"         value={stats.drafts}    href="/review?tab=drafts" color="purple" />
-            <Stat icon={<ClipboardList className="h-4 w-4" />} label="In review"  value={stats.inReview}  href="/review"            color="amber" />
+            <Stat icon={<FileEdit  className="h-4 w-4" />} label="Drafts"         value={stats.drafts}    href="/drafts" color="purple" />
+            <Stat icon={<ClipboardList className="h-4 w-4" />} label="In review"  value={stats.inReview}  href="/drafts"            color="amber" />
             <Stat icon={<Send      className="h-4 w-4" />} label="Published"      value={stats.published} href="/analytics"         color="emerald" />
             <Stat icon={<Users     className="h-4 w-4" />} label="Authors"        value={stats.authors}   href="/authors"           color="cyan" />
           </div>
@@ -99,7 +99,7 @@ export default async function DashboardPage() {
           <div className="mt-10">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Recent posts</h2>
-              <Link href="/review" className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1">
+              <Link href="/drafts" className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1">
                 See all <ArrowUpRight className="h-3 w-3" />
               </Link>
             </div>

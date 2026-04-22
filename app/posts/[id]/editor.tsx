@@ -74,7 +74,7 @@ export function PostEditor({
     try {
       await submitForReviewAction(post.id);
       toast({ title: "Sent for review", kind: "success" });
-      router.push("/review");
+      router.push("/drafts");
     } finally {
       setLoading(null);
     }

@@ -9,6 +9,7 @@ import {
   boolean,
   pgEnum,
   uniqueIndex,
+  primaryKey,
 } from "drizzle-orm/pg-core";
 
 export const signalStatus = pgEnum("signal_status", [
@@ -30,15 +31,17 @@ export const postStatus = pgEnum("post_status", [
 export const signals = pgTable("signals", {
   id: serial("id").primaryKey(),
   rawContent: text("raw_content").notNull(),
-  contentType: varchar("content_type", { length: 64 }).notNull(), // success_metric, paying_quote, buying_signal, etc.
+  contentType: varchar("content_type", { length: 64 }).notNull(),
   vertical: varchar("vertical", { length: 64 }),
-  source: varchar("source", { length: 64 }).default("manual"), // fathom, fireflies, manual
+  source: varchar("source", { length: 64 }).default("manual"),
   sourceMeetingId: varchar("source_meeting_id", { length: 128 }),
   sourceMeetingTitle: text("source_meeting_title"),
   sourceMeetingDate: timestamp("source_meeting_date"),
   speaker: varchar("speaker", { length: 128 }),
   contentAngles: jsonb("content_angles").$type<string[]>().default([]),
   recommendedAuthorId: integer("recommended_author_id"),
+  bestFrameworkId: integer("best_framework_id"),
+  sourceTranscript: text("source_transcript"),
   status: signalStatus("status").default("unused").notNull(),
   notes: text("notes"),
   archivedAt: timestamp("archived_at"),
@@ -49,18 +52,15 @@ export const signals = pgTable("signals", {
 export const authors = pgTable("authors", {
   id: serial("id").primaryKey(),
   name: varchar("name", { length: 128 }).notNull(),
-  role: varchar("role", { length: 128 }), // CTO, Head of Sales, etc.
+  role: varchar("role", { length: 128 }),
   bio: text("bio"),
   linkedinUrl: text("linkedin_url"),
-  /** Voice profile is built up automatically from edits. */
   voiceProfile: text("voice_profile"),
-  /** Stylistic guardrails the author insists on. */
   styleNotes: text("style_notes"),
   preferredFrameworks: jsonb("preferred_frameworks").$type<number[]>().default([]),
   contentAngles: jsonb("content_angles").$type<string[]>(),
   active: boolean("active").default(true).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-  // Fathom OAuth integration
   fathomAccessToken: text("fathom_access_token"),
   fathomRefreshToken: text("fathom_refresh_token"),
   fathomTokenExpiresAt: timestamp("fathom_token_expires_at"),
@@ -68,7 +68,6 @@ export const authors = pgTable("authors", {
   fathomUserEmail: varchar("fathom_user_email", { length: 256 }),
   fathomConnectedAt: timestamp("fathom_connected_at"),
   fathomLastSyncedAt: timestamp("fathom_last_synced_at"),
-  // LinkedIn OAuth integration
   linkedinAccessToken: text("linkedin_access_token"),
   linkedinRefreshToken: text("linkedin_refresh_token"),
   linkedinTokenExpiresAt: timestamp("linkedin_token_expires_at"),
@@ -78,14 +77,30 @@ export const authors = pgTable("authors", {
   linkedinLastSyncedAt: timestamp("linkedin_last_synced_at"),
 });
 
+/** Global pool of named content angles, independent of any author. */
+export const contentAngles = pgTable("content_angles", {
+  id: serial("id").primaryKey(),
+  name: varchar("name", { length: 256 }).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (t) => ({
+  nameIdx: uniqueIndex("content_angles_name_idx").on(t.name),
+}));
+
+/** Join table: which authors are associated with which content angles. */
+export const authorContentAngles = pgTable("author_content_angles", {
+  authorId: integer("author_id").references(() => authors.id, { onDelete: "cascade" }).notNull(),
+  contentAngleId: integer("content_angle_id").references(() => contentAngles.id, { onDelete: "cascade" }).notNull(),
+}, (t) => ({
+  pk: primaryKey({ columns: [t.authorId, t.contentAngleId] }),
+}));
+
 /** Reusable post structures (Hook→Story→Lesson, Before/After, etc.) */
 export const frameworks = pgTable("frameworks", {
   id: serial("id").primaryKey(),
   name: varchar("name", { length: 128 }).notNull(),
   description: text("description").notNull(),
-  /** A short prompt fragment that teaches Claude how to apply this framework. */
   promptTemplate: text("prompt_template").notNull(),
-  bestFor: jsonb("best_for").$type<string[]>().default([]), // signal types this works well with
+  bestFor: jsonb("best_for").$type<string[]>().default([]),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -96,17 +111,14 @@ export const posts = pgTable("posts", {
   authorId: integer("author_id").references(() => authors.id, { onDelete: "set null" }),
   frameworkId: integer("framework_id").references(() => frameworks.id, { onDelete: "set null" }),
   contentAngle: text("content_angle"),
-  /** Current text of the post. */
   content: text("content").notNull(),
-  /** First version Claude produced — never overwritten. Used for diffing edits. */
   originalContent: text("original_content").notNull(),
-  hookStrengthScore: integer("hook_strength_score"), // 0-100
-  specificityScore: integer("specificity_score"), // 0-100
+  hookStrengthScore: integer("hook_strength_score"),
+  specificityScore: integer("specificity_score"),
   status: postStatus("status").default("draft").notNull(),
   reviewerNotes: text("reviewer_notes"),
   scheduledFor: timestamp("scheduled_for"),
   publishedAt: timestamp("published_at"),
-  /** LinkedIn activity/ugcPost URN, set when marking as published. Used to sync analytics. */
   linkedinPostUrn: varchar("linkedin_post_urn", { length: 256 }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -134,7 +146,7 @@ export const analytics = pgTable("analytics", {
   comments: integer("comments").default(0),
   shares: integer("shares").default(0),
   clicks: integer("clicks").default(0),
-  source: varchar("source", { length: 32 }).default("manual"), // "manual" | "linkedin"
+  source: varchar("source", { length: 32 }).default("manual"),
   capturedAt: timestamp("captured_at").defaultNow().notNull(),
 });
 
@@ -168,7 +180,7 @@ export const oauthStates = pgTable("oauth_states", {
   id: serial("id").primaryKey(),
   state: varchar("state", { length: 64 }).notNull(),
   authorId: integer("author_id").references(() => authors.id, { onDelete: "cascade" }),
-  provider: varchar("provider", { length: 32 }).default("fathom"), // "fathom" | "linkedin"
+  provider: varchar("provider", { length: 32 }).default("fathom"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   expiresAt: timestamp("expires_at").notNull(),
 }, (t) => ({
@@ -182,3 +194,5 @@ export type Post = typeof posts.$inferSelect;
 export type Edit = typeof edits.$inferSelect;
 export type AnalyticsRow = typeof analytics.$inferSelect;
 export type DesignBrief = typeof designBriefs.$inferSelect;
+export type ContentAngle = typeof contentAngles.$inferSelect;
+export type AuthorContentAngle = typeof authorContentAngles.$inferSelect;

@@ -2,7 +2,7 @@
 
 import { db, schema } from "@/lib/db";
 import { revalidatePath } from "next/cache";
-import { desc, eq, and, sql, lt } from "drizzle-orm";
+import { desc, eq, and, sql, lt, inArray, ilike, or } from "drizzle-orm";
 import { extractLinkedinPostUrn } from "@/lib/linkedin";
 import {
   generatePostsFromTranscript,
@@ -45,6 +45,7 @@ export async function extractSignalsAction(
       source: "manual" as const,
       sourceMeetingTitle: meetingTitle ?? null,
       sourceMeetingDate: meetingDate ? new Date(meetingDate) : null,
+      sourceTranscript: transcript,
     };
   });
   const inserted = await db.insert(schema.signals).values(rows).returning();
@@ -110,6 +111,23 @@ export async function createSignalAction(input: {
   return row;
 }
 
+export async function updateSignalAuthorAction(id: number, authorId: number | null) {
+  await db.update(schema.signals).set({ recommendedAuthorId: authorId }).where(eq(schema.signals.id, id));
+  revalidatePath(`/signals/${id}`);
+  revalidatePath("/signals");
+}
+
+export async function updateSignalBestFrameworkAction(id: number, frameworkId: number | null) {
+  await db.update(schema.signals).set({ bestFrameworkId: frameworkId }).where(eq(schema.signals.id, id));
+  revalidatePath(`/signals/${id}`);
+}
+
+export async function updateSignalContentAnglesAction(id: number, angles: string[]) {
+  await db.update(schema.signals).set({ contentAngles: angles } as any).where(eq(schema.signals.id, id));
+  revalidatePath(`/signals/${id}`);
+  revalidatePath("/signals");
+}
+
 export async function applyFrameworkToSignalAction(content: string, frameworkId: number): Promise<string> {
   const [framework] = await db.select().from(schema.frameworks).where(eq(schema.frameworks.id, frameworkId));
   if (!framework) throw new Error("Framework not found.");
@@ -131,6 +149,67 @@ export async function restoreSignalAction(id: number) {
   await db.update(schema.signals).set({ status: "unused", archivedAt: null }).where(eq(schema.signals.id, id));
   revalidatePath("/signals");
   revalidatePath("/signals/archive");
+}
+
+/* ========== CONTENT ANGLES ========== */
+
+export async function getAllContentAnglesAction() {
+  return db.select().from(schema.contentAngles).orderBy(schema.contentAngles.name);
+}
+
+export async function getAuthorContentAnglesAction(authorId: number) {
+  const rows = await db
+    .select({ angle: schema.contentAngles })
+    .from(schema.authorContentAngles)
+    .innerJoin(schema.contentAngles, eq(schema.authorContentAngles.contentAngleId, schema.contentAngles.id))
+    .where(eq(schema.authorContentAngles.authorId, authorId));
+  return rows.map((r) => r.angle);
+}
+
+export async function createContentAngleAction(name: string): Promise<typeof schema.contentAngles.$inferSelect> {
+  const trimmed = name.trim();
+  if (!trimmed) throw new Error("Angle name is required.");
+  const existing = await db.select().from(schema.contentAngles).where(eq(schema.contentAngles.name, trimmed)).limit(1);
+  if (existing[0]) return existing[0];
+  const [created] = await db.insert(schema.contentAngles).values({ name: trimmed }).returning();
+  revalidatePath("/authors/content-angles");
+  return created;
+}
+
+export async function deleteContentAngleAction(id: number) {
+  await db.delete(schema.contentAngles).where(eq(schema.contentAngles.id, id));
+  revalidatePath("/authors/content-angles");
+  revalidatePath("/authors");
+}
+
+export async function addContentAngleToAuthorAction(authorId: number, contentAngleId: number) {
+  await db.insert(schema.authorContentAngles).values({ authorId, contentAngleId }).onConflictDoNothing();
+
+  const [author] = await db.select().from(schema.authors).where(eq(schema.authors.id, authorId));
+  const [angle] = await db.select().from(schema.contentAngles).where(eq(schema.contentAngles.id, contentAngleId));
+  const existing = (author?.contentAngles as string[] | null) ?? [];
+  if (angle && !existing.includes(angle.name)) {
+    await db.update(schema.authors).set({ contentAngles: [...existing, angle.name] } as any).where(eq(schema.authors.id, authorId));
+  }
+
+  revalidatePath(`/authors/${authorId}`);
+  revalidatePath("/authors/content-angles");
+}
+
+export async function removeContentAngleFromAuthorAction(authorId: number, contentAngleId: number) {
+  await db
+    .delete(schema.authorContentAngles)
+    .where(and(eq(schema.authorContentAngles.authorId, authorId), eq(schema.authorContentAngles.contentAngleId, contentAngleId)));
+
+  const [author] = await db.select().from(schema.authors).where(eq(schema.authors.id, authorId));
+  const [angle] = await db.select().from(schema.contentAngles).where(eq(schema.contentAngles.id, contentAngleId));
+  const existing = (author?.contentAngles as string[] | null) ?? [];
+  if (angle) {
+    await db.update(schema.authors).set({ contentAngles: existing.filter((a) => a !== angle.name) } as any).where(eq(schema.authors.id, authorId));
+  }
+
+  revalidatePath(`/authors/${authorId}`);
+  revalidatePath("/authors/content-angles");
 }
 
 /* ========== AUTHORS ========== */
@@ -172,8 +251,28 @@ export async function updateAuthorAction(id: number, patch: Partial<{
 export async function updateAuthorContentAnglesAction(authorId: number, angles: string[]) {
   const filtered = angles.map((a) => a.trim()).filter(Boolean);
   if (filtered.length === 0) throw new Error("At least one content angle is required.");
+
+  // Upsert each angle into global pool
+  const angleRows = await Promise.all(
+    filtered.map(async (name) => {
+      const ex = await db.select().from(schema.contentAngles).where(eq(schema.contentAngles.name, name)).limit(1);
+      if (ex[0]) return ex[0];
+      const [c] = await db.insert(schema.contentAngles).values({ name }).returning();
+      return c;
+    })
+  );
+
+  // Replace author's join-table entries
+  await db.delete(schema.authorContentAngles).where(eq(schema.authorContentAngles.authorId, authorId));
+  if (angleRows.length > 0) {
+    await db.insert(schema.authorContentAngles).values(angleRows.map((a) => ({ authorId, contentAngleId: a.id })));
+  }
+
+  // Keep jsonb in sync for backward compat
   await db.update(schema.authors).set({ contentAngles: filtered } as any).where(eq(schema.authors.id, authorId));
+
   revalidatePath(`/authors/${authorId}`);
+  revalidatePath("/authors/content-angles");
 }
 
 /* ========== FRAMEWORKS ========== */
@@ -197,6 +296,21 @@ export async function createFrameworkAction(input: {
   return row;
 }
 
+export async function updateFrameworkAction(id: number, patch: {
+  name?: string;
+  description?: string;
+  promptTemplate?: string;
+  bestFor?: string[];
+}) {
+  await db.update(schema.frameworks).set(patch).where(eq(schema.frameworks.id, id));
+  revalidatePath("/frameworks");
+}
+
+export async function deleteFrameworkAction(id: number) {
+  await db.delete(schema.frameworks).where(eq(schema.frameworks.id, id));
+  revalidatePath("/frameworks");
+}
+
 /* ========== POSTS ========== */
 
 export async function generatePostAction(input: {
@@ -210,7 +324,6 @@ export async function generatePostAction(input: {
   const [framework] = await db.select().from(schema.frameworks).where(eq(schema.frameworks.id, input.frameworkId));
   if (!signal || !author || !framework) throw new Error("Missing signal, author, or framework.");
 
-  // Pull the author's top-performing hooks for context.
   const topHooks = await db
     .select({ content: schema.posts.content })
     .from(schema.posts)
@@ -239,7 +352,6 @@ export async function generatePostAction(input: {
   let text = await generatePost(postInput);
   let scores = await scorePost(text).catch(() => ({ hookStrength: 0, specificity: 0, notes: "" }));
 
-  // If the first draft scores poorly, try once more at a lower temperature for tighter output
   if (scores.hookStrength < 45 || scores.specificity < 45) {
     const retry = await generatePost(postInput).catch(() => null);
     if (retry) {
@@ -269,6 +381,7 @@ export async function generatePostAction(input: {
   await db.update(schema.signals).set({ status: "drafting" }).where(eq(schema.signals.id, input.signalId));
 
   revalidatePath("/signals");
+  revalidatePath("/drafts");
   revalidatePath("/");
   revalidatePath(`/posts/${post.id}`);
   return post;
@@ -284,7 +397,6 @@ export async function updatePostContentAction(postId: number, newContent: string
     .set({ content: newContent, updatedAt: new Date() })
     .where(eq(schema.posts.id, postId));
 
-  // record the edit
   await db.insert(schema.edits).values({
     postId,
     authorId: current.authorId,
@@ -294,7 +406,6 @@ export async function updatePostContentAction(postId: number, newContent: string
     instruction: instruction ?? null,
   });
 
-  // Re-score (non-blocking feel — but we await for simplicity)
   const scores = await scorePost(newContent).catch(() => null);
   if (scores) {
     await db
@@ -303,7 +414,6 @@ export async function updatePostContentAction(postId: number, newContent: string
       .where(eq(schema.posts.id, postId));
   }
 
-  // Update the author's voice profile using the last ~5 edits.
   if (current.authorId) {
     const recent = await db
       .select()
@@ -339,7 +449,7 @@ export async function assistedEditAction(postId: number, instruction: string) {
 
 export async function submitForReviewAction(postId: number) {
   await db.update(schema.posts).set({ status: "in_review", updatedAt: new Date() }).where(eq(schema.posts.id, postId));
-  revalidatePath("/review");
+  revalidatePath("/drafts");
   revalidatePath(`/posts/${postId}`);
 }
 
@@ -348,7 +458,7 @@ export async function approvePostAction(postId: number, notes?: string) {
     .update(schema.posts)
     .set({ status: "approved", reviewerNotes: notes ?? null, updatedAt: new Date() })
     .where(eq(schema.posts.id, postId));
-  revalidatePath("/review");
+  revalidatePath("/drafts");
   revalidatePath(`/posts/${postId}`);
 }
 
@@ -357,7 +467,7 @@ export async function rejectPostAction(postId: number, notes: string) {
     .update(schema.posts)
     .set({ status: "rejected", reviewerNotes: notes, updatedAt: new Date() })
     .where(eq(schema.posts.id, postId));
-  revalidatePath("/review");
+  revalidatePath("/drafts");
   revalidatePath(`/posts/${postId}`);
 }
 
@@ -376,7 +486,7 @@ export async function markPublishedAction(postId: number, linkedinUrl?: string) 
   if (p?.signalId) {
     await db.update(schema.signals).set({ status: "used" }).where(eq(schema.signals.id, p.signalId));
   }
-  revalidatePath("/review");
+  revalidatePath("/drafts");
   revalidatePath(`/posts/${postId}`);
   revalidatePath("/analytics");
 }

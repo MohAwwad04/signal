@@ -3,7 +3,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { LayoutDashboard, Radio, Users, BarChart3, Wrench, Sun, Moon, LogOut } from "lucide-react";
+import { LayoutDashboard, Radio, Users, BarChart3, Wrench, Sun, Moon, LogOut, FileEdit } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/components/theme-provider";
 
@@ -19,6 +19,7 @@ function useUserEmail() {
 const items = [
   { href: "/",           label: "Dashboard",  icon: LayoutDashboard },
   { href: "/signals",    label: "Signals",    icon: Radio },
+  { href: "/drafts",     label: "Drafts",     icon: FileEdit },
   { href: "/authors",    label: "Authors",    icon: Users },
   { href: "/analytics",  label: "Analytics",  icon: BarChart3 },
   { href: "/frameworks", label: "Frameworks", icon: Wrench },

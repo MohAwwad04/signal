@@ -10,6 +10,8 @@ import { FathomCard } from "./fathom-card";
 import { LinkedInCard } from "./linkedin-card";
 import { ContentAngles } from "./content-angles";
 import { ArrowUpRight, User } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { ArrowLeft } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -19,12 +21,22 @@ export default async function AuthorDetailPage({ params }: { params: { id: strin
   const id = Number(params.id);
   const [author] = await db.select().from(schema.authors).where(eq(schema.authors.id, id));
   if (!author) notFound();
-  console.log(`[author/${id}] fathomAccessToken present:`, !!author.fathomAccessToken, "email:", author.fathomUserEmail, "connectedAt:", author.fathomConnectedAt);
-  const posts = await db.select().from(schema.posts).where(eq(schema.posts.authorId, id)).orderBy(desc(schema.posts.updatedAt));
-  const recentEdits = await db.select().from(schema.edits).where(eq(schema.edits.authorId, id)).orderBy(desc(schema.edits.createdAt)).limit(5);
+  const [posts, recentEdits, allGlobalAngles] = await Promise.all([
+    db.select().from(schema.posts).where(eq(schema.posts.authorId, id)).orderBy(desc(schema.posts.updatedAt)),
+    db.select().from(schema.edits).where(eq(schema.edits.authorId, id)).orderBy(desc(schema.edits.createdAt)).limit(5),
+    db.select({ id: schema.contentAngles.id, name: schema.contentAngles.name }).from(schema.contentAngles).orderBy(schema.contentAngles.name),
+  ]);
 
   return (
     <div className="mx-auto w-full max-w-4xl p-6 md:p-10">
+      <div className="mb-6">
+        <Link href="/authors">
+          <Button variant="ghost" size="sm" className="pl-1">
+            <ArrowLeft className="h-4 w-4" />
+            Back to authors
+          </Button>
+        </Link>
+      </div>
       <header className="mb-8">
         <div className="flex items-center gap-2 mb-1">
           <User className="h-4 w-4 text-cyan-500" />
@@ -68,6 +80,7 @@ export default async function AuthorDetailPage({ params }: { params: { id: strin
           <ContentAngles
             authorId={author.id}
             initialAngles={(author.contentAngles as string[] | null) ?? []}
+            allGlobalAngles={allGlobalAngles}
           />
         </CardContent>
       </Card>

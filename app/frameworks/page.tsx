@@ -2,6 +2,7 @@ import { db, schema } from "@/lib/db";
 import { desc } from "drizzle-orm";
 import { Badge } from "@/components/ui/badge";
 import { NewFrameworkForm } from "./new-form";
+import { FrameworkCard } from "./framework-card";
 import { Layers } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -34,14 +35,7 @@ export default async function FrameworksPage() {
             </div>
           )}
           {frameworks.map((f) => (
-            <div key={f.id} className="rounded-2xl border border-border bg-card p-5 transition-all duration-200 hover:border-purple-400/30 hover:shadow-glow-sm">
-              <div className="mb-1 text-base font-semibold">{f.name}</div>
-              <p className="mb-3 text-sm text-muted-foreground">{f.description}</p>
-              <div className="mb-3 flex flex-wrap gap-1.5">
-                {(f.bestFor ?? []).map((b) => <Badge key={b} variant="secondary">{b.replaceAll("_", " ")}</Badge>)}
-              </div>
-              <pre className="whitespace-pre-wrap rounded-xl bg-secondary/50 p-3 text-xs text-muted-foreground">{f.promptTemplate}</pre>
-            </div>
+            <FrameworkCard key={f.id} framework={f} />
           ))}
         </div>
 
