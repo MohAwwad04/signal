@@ -178,8 +178,10 @@ export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   email: varchar("email", { length: 256 }).notNull(),
   role: varchar("role", { length: 32 }).notNull().default("user"), // 'superadmin' | 'admin' | 'user'
+  passwordHash: text("password_hash"),
+  active: boolean("active").default(false).notNull(),
   authorId: integer("author_id").references(() => authors.id, { onDelete: "set null" }),
-  invitedBy: varchar("invited_by", { length: 256 }), // email of the admin who invited them
+  invitedBy: varchar("invited_by", { length: 256 }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (t) => ({
   emailIdx: uniqueIndex("users_email_idx").on(t.email),

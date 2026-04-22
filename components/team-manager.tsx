@@ -82,6 +82,7 @@ export function TeamManager({ users, isSuperAdmin }: { users: User[]; isSuperAdm
             <li key={u.id} className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2">
               <span className="truncate text-sm">{u.email}</span>
               <div className="flex items-center gap-2 shrink-0">
+                {!u.active && <Badge variant="outline" className="text-[10px] text-amber-500 border-amber-500/40">Pending</Badge>}
                 <Badge variant={u.role === "admin" ? "default" : "secondary"} className="text-[10px]">
                   {u.role}
                 </Badge>
