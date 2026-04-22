@@ -300,15 +300,6 @@ export async function createAuthorAction(input: {
       email,
     })
     .returning();
-
-  // Grant login access for this author
-  if (email) {
-    await db
-      .insert(schema.users)
-      .values({ email, role: "user" })
-      .onConflictDoNothing();
-  }
-
   revalidatePath("/authors");
   return row;
 }
@@ -394,10 +385,23 @@ export async function deleteFrameworkAction(id: number) {
 export async function addUserAction(email: string, role: "admin" | "user") {
   const normalized = email.toLowerCase().trim();
   if (!normalized || !normalized.includes("@")) throw new Error("Invalid email.");
+
   await db
     .insert(schema.users)
     .values({ email: normalized, role })
     .onConflictDoUpdate({ target: schema.users.email, set: { role } });
+
+  // Generate invite token (7-day expiry)
+  const token = crypto.randomUUID().replace(/-/g, "") + crypto.randomUUID().replace(/-/g, "");
+  await db.insert(schema.authTokens).values({
+    email: normalized,
+    token,
+    expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+  });
+
+  const { sendInviteEmail } = await import("@/lib/email");
+  await sendInviteEmail(normalized, token);
+
   revalidatePath("/authors");
 }
 

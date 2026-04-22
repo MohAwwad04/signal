@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { timeAgo } from "@/lib/utils";
 import { Plus, User, Archive, Radio, ArrowUpRight, FileText } from "lucide-react";
 import { SignalFilterBar } from "./filter-bar";
+import { getCurrentUser } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -18,9 +19,14 @@ export default async function SignalsPage({
 }) {
   const { q, author, angle, from, to } = searchParams;
 
+  const session = await getCurrentUser();
   const conditions: any[] = [ne(schema.signals.status, "archived")];
+  // Non-admins only see signals assigned to their author
+  if (!session?.isAdmin && session?.authorId) {
+    conditions.push(eq(schema.signals.recommendedAuthorId, session.authorId));
+  }
   if (q) conditions.push(ilike(schema.signals.rawContent, `%${q}%`));
-  if (author) conditions.push(eq(schema.signals.recommendedAuthorId, Number(author)));
+  if (author && session?.isAdmin) conditions.push(eq(schema.signals.recommendedAuthorId, Number(author)));
   if (from) conditions.push(gte(schema.signals.createdAt, new Date(from)));
   if (to) conditions.push(lte(schema.signals.createdAt, new Date(to + "T23:59:59")));
   if (angle) conditions.push(sql`${schema.signals.contentAngles} @> ${JSON.stringify([angle])}::jsonb`);

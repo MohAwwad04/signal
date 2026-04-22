@@ -1,18 +1,28 @@
 import Link from "next/link";
 import { db, schema } from "@/lib/db";
-import { desc } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Plus, Users, ArrowUpRight, Tag } from "lucide-react";
 import { TeamManager } from "@/components/team-manager";
+import { getCurrentUser } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export default async function AuthorsPage() {
+  const session = await getCurrentUser();
+  const isAdmin = session?.isAdmin ?? false;
+
   const [authors, users] = await Promise.all([
-    db.select().from(schema.authors).orderBy(desc(schema.authors.createdAt)).catch(() => []),
-    db.select().from(schema.users).orderBy(desc(schema.users.createdAt)).catch(() => []),
+    isAdmin
+      ? db.select().from(schema.authors).orderBy(desc(schema.authors.createdAt)).catch(() => [])
+      : session?.authorId
+        ? db.select().from(schema.authors).where(eq(schema.authors.id, session.authorId)).catch(() => [])
+        : Promise.resolve([]),
+    isAdmin
+      ? db.select().from(schema.users).orderBy(desc(schema.users.createdAt)).catch(() => [])
+      : Promise.resolve([]),
   ]);
   return (
     <div className="mx-auto w-full max-w-5xl p-6 md:p-10">
@@ -27,20 +37,22 @@ export default async function AuthorsPage() {
             People we write in the voice of. Voice profiles learn from edits automatically.
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Link href="/authors/content-angles">
-            <Button variant="outline">
-              <Tag className="h-4 w-4" />
-              Content angles
-            </Button>
-          </Link>
-          <Link href="/authors/new">
-            <Button>
-              <Plus className="h-4 w-4" />
-              New author
-            </Button>
-          </Link>
-        </div>
+        {isAdmin && (
+          <div className="flex items-center gap-2">
+            <Link href="/authors/content-angles">
+              <Button variant="outline">
+                <Tag className="h-4 w-4" />
+                Content angles
+              </Button>
+            </Link>
+            <Link href="/authors/new">
+              <Button>
+                <Plus className="h-4 w-4" />
+                New author
+              </Button>
+            </Link>
+          </div>
+        )}
       </header>
 
       {authors.length === 0 ? (
@@ -93,9 +105,11 @@ export default async function AuthorsPage() {
         </div>
       )}
 
-      <div className="mt-10">
-        <TeamManager users={users} />
-      </div>
+      {isAdmin && (
+        <div className="mt-10">
+          <TeamManager users={users} />
+        </div>
+      )}
     </div>
   );
 }

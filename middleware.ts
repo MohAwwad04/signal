@@ -2,7 +2,9 @@ import { NextResponse, type NextRequest } from "next/server";
 
 const PUBLIC_PATHS = [
   "/login",
+  "/invite",
   "/api/auth/login",
+  "/api/invite",
   "/api/fathom/webhook",
   "/api/fathom/oauth/callback",
   "/api/linkedin/oauth/callback",
