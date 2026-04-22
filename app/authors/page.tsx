@@ -4,12 +4,16 @@ import { desc } from "drizzle-orm";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Plus, Users, ArrowUpRight, Tag } from "lucide-react";
+import { TeamManager } from "@/components/team-manager";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export default async function AuthorsPage() {
-  const authors = await db.select().from(schema.authors).orderBy(desc(schema.authors.createdAt)).catch(() => []);
+  const [authors, users] = await Promise.all([
+    db.select().from(schema.authors).orderBy(desc(schema.authors.createdAt)).catch(() => []),
+    db.select().from(schema.users).orderBy(desc(schema.users.createdAt)).catch(() => []),
+  ]);
   return (
     <div className="mx-auto w-full max-w-5xl p-6 md:p-10">
       <header className="mb-8 flex items-end justify-between gap-4">
@@ -88,6 +92,10 @@ export default async function AuthorsPage() {
           })}
         </div>
       )}
+
+      <div className="mt-10">
+        <TeamManager users={users} />
+      </div>
     </div>
   );
 }

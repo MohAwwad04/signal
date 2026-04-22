@@ -172,6 +172,16 @@ export const designBriefs = pgTable("design_briefs", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+/** Team members who can log in, with their access role. */
+export const users = pgTable("users", {
+  id: serial("id").primaryKey(),
+  email: varchar("email", { length: 256 }).notNull(),
+  role: varchar("role", { length: 32 }).notNull().default("user"), // 'admin' | 'user'
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (t) => ({
+  emailIdx: uniqueIndex("users_email_idx").on(t.email),
+}));
+
 /** Magic-link auth: tokens issued to allowed emails. */
 export const authTokens = pgTable("auth_tokens", {
   id: serial("id").primaryKey(),
@@ -205,3 +215,4 @@ export type AnalyticsRow = typeof analytics.$inferSelect;
 export type DesignBrief = typeof designBriefs.$inferSelect;
 export type ContentAngle = typeof contentAngles.$inferSelect;
 export type AuthorContentAngle = typeof authorContentAngles.$inferSelect;
+export type User = typeof users.$inferSelect;

@@ -377,6 +377,23 @@ export async function deleteFrameworkAction(id: number) {
   revalidatePath("/frameworks");
 }
 
+/* ========== USERS ========== */
+
+export async function addUserAction(email: string, role: "admin" | "user") {
+  const normalized = email.toLowerCase().trim();
+  if (!normalized || !normalized.includes("@")) throw new Error("Invalid email.");
+  await db
+    .insert(schema.users)
+    .values({ email: normalized, role })
+    .onConflictDoUpdate({ target: schema.users.email, set: { role } });
+  revalidatePath("/authors");
+}
+
+export async function removeUserAction(id: number) {
+  await db.delete(schema.users).where(eq(schema.users.id, id));
+  revalidatePath("/authors");
+}
+
 /* ========== POSTS ========== */
 
 export async function generatePostAction(input: {
