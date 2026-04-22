@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { db, schema } from "@/lib/db";
 import { eq, and, gt } from "drizzle-orm";
-import { fetchLinkedinProfile } from "@/lib/linkedin";
+import { fetchLinkedinProfile, fetchLinkedinVanityName } from "@/lib/linkedin";
 
 const LINKEDIN_TOKEN_URL = "https://www.linkedin.com/oauth/v2/accessToken";
 const LINKEDIN_CLIENT_ID = process.env.LINKEDIN_CLIENT_ID ?? "";
@@ -62,10 +62,15 @@ export async function GET(req: NextRequest) {
   const tokens = await tokenRes.json();
   const expiresAt = new Date(Date.now() + (tokens.expires_in ?? 3600) * 1000);
 
-  const profile = await fetchLinkedinProfile(tokens.access_token).catch((e) => {
-    console.error("[linkedin-callback] fetchLinkedinProfile failed:", e);
-    return { id: "", name: "" };
-  });
+  const [profile, vanityName] = await Promise.all([
+    fetchLinkedinProfile(tokens.access_token).catch((e) => {
+      console.error("[linkedin-callback] fetchLinkedinProfile failed:", e);
+      return { id: "", name: "" };
+    }),
+    fetchLinkedinVanityName(tokens.access_token).catch(() => null),
+  ]);
+
+  const linkedinUrl = vanityName ? `https://www.linkedin.com/in/${vanityName}` : undefined;
 
   try {
     await db
@@ -77,6 +82,7 @@ export async function GET(req: NextRequest) {
         linkedinMemberId: profile.id,
         linkedinMemberName: profile.name,
         linkedinConnectedAt: new Date(),
+        ...(linkedinUrl ? { linkedinUrl } : {}),
       })
       .where(eq(schema.authors.id, authorId));
   } catch (e) {

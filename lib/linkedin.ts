@@ -81,6 +81,20 @@ export async function fetchLinkedinProfile(accessToken: string): Promise<{ id: s
 }
 
 /**
+ * Fetch the LinkedIn vanity name (profile URL slug) via /v2/me.
+ * Returns null if the endpoint is not accessible with current scopes.
+ */
+export async function fetchLinkedinVanityName(accessToken: string): Promise<string | null> {
+  const res = await fetch(
+    `${LINKEDIN_API_BASE}/v2/me?projection=(id,vanityName)`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+  if (!res.ok) return null;
+  const data = await res.json();
+  return data.vanityName ?? null;
+}
+
+/**
  * Fetch the author's most recent LinkedIn posts (up to 20).
  * Requires w_member_social or r_member_social scope.
  * Returns null if the endpoint isn't accessible (insufficient permissions).

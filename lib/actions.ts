@@ -3,7 +3,7 @@
 import { db, schema } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { desc, eq, and, sql, lt, inArray, ilike, or } from "drizzle-orm";
-import { extractLinkedinPostUrn, fetchLinkedinAuthoredPosts, getValidLinkedinToken } from "@/lib/linkedin";
+import { extractLinkedinPostUrn, fetchLinkedinAuthoredPosts, getValidLinkedinToken, fetchLinkedinVanityName } from "@/lib/linkedin";
 import {
   generatePostsFromTranscript,
   generatePost,
@@ -760,9 +760,24 @@ async function applyAnalysis(
 }
 
 export async function scrapeLinkedinProfileAction(authorId: number): Promise<string> {
-  const [author] = await db.select().from(schema.authors).where(eq(schema.authors.id, authorId));
+  let [author] = await db.select().from(schema.authors).where(eq(schema.authors.id, authorId));
   if (!author) throw new Error("Author not found.");
-  if (!author.linkedinUrl) throw new Error("No LinkedIn URL set for this author. Add it in the profile header first.");
+
+  // Auto-resolve URL from LinkedIn OAuth if not set yet
+  if (!author.linkedinUrl && author.linkedinAccessToken) {
+    try {
+      const token = await getValidLinkedinToken(authorId);
+      const vanityName = await fetchLinkedinVanityName(token);
+      if (vanityName) {
+        const linkedinUrl = `https://www.linkedin.com/in/${vanityName}`;
+        await db.update(schema.authors).set({ linkedinUrl }).where(eq(schema.authors.id, authorId));
+        author = { ...author, linkedinUrl };
+        revalidatePath(`/authors/${authorId}`);
+      }
+    } catch { /* proceed without URL */ }
+  }
+
+  if (!author.linkedinUrl) throw new Error("No LinkedIn URL found. Add it in the profile header.");
 
   const baseUrl = author.linkedinUrl.replace(/\/$/, "");
   const activityUrl = `${baseUrl}/recent-activity/shares/`;
@@ -775,7 +790,7 @@ export async function scrapeLinkedinProfileAction(authorId: number): Promise<str
 
   const combined = [profileText, activityText].filter(Boolean).join("\n\n---\n\n");
   if (!combined || combined.length < 200) {
-    throw new Error("LinkedIn page could not be accessed — LinkedIn may require a login to view this profile. Try the paste option below.");
+    throw new Error("LinkedIn page could not be accessed — the profile may be private or require a login.");
   }
 
   const allFrameworks = await db.select({ name: schema.frameworks.name, description: schema.frameworks.description }).from(schema.frameworks);

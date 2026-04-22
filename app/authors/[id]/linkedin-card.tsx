@@ -92,12 +92,11 @@ export function LinkedInCard({
       <p className="text-xs text-muted-foreground">
         Reads the LinkedIn profile to fill in content angles, preferred frameworks, and voice profile.
       </p>
-      {linkedinUrl ? (
-        <Button size="sm" variant="secondary" onClick={handleScrape} disabled={scraping}>
-          {scraping ? "Reading LinkedIn…" : "Auto-fill from LinkedIn"}
-        </Button>
-      ) : (
-        <p className="text-xs text-amber-500">Add a LinkedIn URL in the profile header to enable this.</p>
+      <Button size="sm" variant="secondary" onClick={handleScrape} disabled={scraping}>
+        {scraping ? "Reading LinkedIn…" : "Auto-fill from LinkedIn"}
+      </Button>
+      {!linkedinUrl && !isConnected && (
+        <p className="text-xs text-amber-500">Add a LinkedIn URL in the profile header, or connect LinkedIn to enable this.</p>
       )}
     </div>
   );
