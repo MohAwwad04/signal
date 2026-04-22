@@ -10,7 +10,7 @@ function hashToken(s: string) {
 }
 
 export async function POST(req: NextRequest) {
-  const { token, password, name, bio, styleNotes, contentAngles } = await req.json().catch(() => ({}));
+  const { token, password, name, bio, styleNotes, contentAngles, linkedinUrl } = await req.json().catch(() => ({}));
 
   if (!token || !password) {
     return NextResponse.json({ error: "Missing required fields." }, { status: 400 });
@@ -49,6 +49,7 @@ export async function POST(req: NextRequest) {
     bio: !isAdmin ? (bio?.trim() || null) : null,
     styleNotes: !isAdmin ? (styleNotes?.trim() || null) : null,
     contentAngles: angles,
+    linkedinUrl: !isAdmin ? (linkedinUrl?.trim() || null) : null,
     email,
     active: true,
   }).returning();

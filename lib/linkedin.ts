@@ -81,6 +81,39 @@ export async function fetchLinkedinProfile(accessToken: string): Promise<{ id: s
 }
 
 /**
+ * Fetch the author's most recent LinkedIn posts (up to 20).
+ * Requires w_member_social or r_member_social scope.
+ * Returns null if the endpoint isn't accessible (insufficient permissions).
+ */
+export async function fetchLinkedinAuthoredPosts(
+  accessToken: string,
+  memberId: string
+): Promise<string[] | null> {
+  const authorUrn = encodeURIComponent(`urn:li:person:${memberId}`);
+  const res = await fetch(
+    `${LINKEDIN_API_BASE}/rest/posts?author=${authorUrn}&count=20&sortBy=LAST_MODIFIED`,
+    {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "LinkedIn-Version": LINKEDIN_VERSION,
+        "X-Restli-Protocol-Version": "2.0.0",
+      },
+    }
+  );
+
+  if (!res.ok) {
+    console.warn(`[linkedin] fetchAuthoredPosts → ${res.status}`);
+    return null;
+  }
+
+  const data = await res.json();
+  const elements: any[] = data.elements ?? [];
+  return elements
+    .filter((el) => el.lifecycleState === "PUBLISHED" && el.commentary)
+    .map((el) => el.commentary as string);
+}
+
+/**
  * Extract a LinkedIn post URN from a post URL.
  *
  * Supported URL formats:

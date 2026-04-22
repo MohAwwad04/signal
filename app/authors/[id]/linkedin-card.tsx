@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { timeAgo } from "@/lib/utils";
 import { toast } from "@/components/ui/toaster";
+import { analyzeLinkedinProfileAction } from "@/lib/actions";
 
 export function LinkedInCard({
   authorId,
@@ -24,6 +25,7 @@ export function LinkedInCard({
   const router = useRouter();
   const [syncing, setSyncing] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
 
   useEffect(() => {
     const li = searchParams.get("linkedin");
@@ -50,6 +52,23 @@ export function LinkedInCard({
       toast({ title: "Sync request failed", kind: "error" });
     } finally {
       setSyncing(false);
+    }
+  }
+
+  async function handleAnalyze() {
+    setAnalyzing(true);
+    try {
+      const result = await analyzeLinkedinProfileAction(authorId);
+      if (result.ok) {
+        toast({ title: result.message, kind: "success" });
+        router.refresh();
+      } else {
+        toast({ title: "Analysis incomplete", description: result.message, kind: "error" });
+      }
+    } catch (e: any) {
+      toast({ title: "Analysis failed", description: e.message, kind: "error" });
+    } finally {
+      setAnalyzing(false);
     }
   }
 
@@ -92,9 +111,12 @@ export function LinkedInCard({
               <p className="text-xs text-muted-foreground">
                 Syncs analytics for published posts that have a LinkedIn URL attached.
               </p>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 <Button size="sm" onClick={handleSync} disabled={syncing}>
-                  {syncing ? "Syncing..." : "Sync now"}
+                  {syncing ? "Syncing..." : "Sync analytics"}
+                </Button>
+                <Button size="sm" variant="secondary" onClick={handleAnalyze} disabled={analyzing}>
+                  {analyzing ? "Analyzing posts…" : "Analyze my posts"}
                 </Button>
                 <Button
                   size="sm"
@@ -105,6 +127,9 @@ export function LinkedInCard({
                   {disconnecting ? "..." : "Disconnect"}
                 </Button>
               </div>
+              <p className="text-xs text-muted-foreground">
+                "Analyze my posts" reads your recent LinkedIn posts and auto-fills your content angles, preferred frameworks, and voice profile.
+              </p>
             </div>
           ) : (
             <div className="space-y-3">

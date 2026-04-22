@@ -20,7 +20,7 @@ function InviteForm() {
 
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
-  const [profile, setProfile] = useState({ name: "", bio: "", contentAngles: "", styleNotes: "" });
+  const [profile, setProfile] = useState({ name: "", bio: "", contentAngles: "", styleNotes: "", linkedinUrl: "" });
 
   useEffect(() => {
     if (!token) { setTokenError("No invite token found."); return; }
@@ -139,6 +139,9 @@ function InviteForm() {
                   </Field>
                   <Field label="Style notes" hint="How you like to write — Claude will follow these">
                     <Textarea value={profile.styleNotes} onChange={(e) => setProfile({ ...profile, styleNotes: e.target.value })} placeholder="e.g. no emojis, short punchy lines, no hashtags" rows={2} />
+                  </Field>
+                  <Field label="LinkedIn profile URL" hint="Optional — used to auto-fill your content style from your posts">
+                    <Input value={profile.linkedinUrl} onChange={(e) => setProfile({ ...profile, linkedinUrl: e.target.value })} placeholder="https://linkedin.com/in/your-profile" />
                   </Field>
                 </>
               )}

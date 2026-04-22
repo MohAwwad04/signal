@@ -9,6 +9,7 @@ import { timeAgo } from "@/lib/utils";
 import { FathomCard } from "./fathom-card";
 import { LinkedInCard } from "./linkedin-card";
 import { ContentAngles } from "./content-angles";
+import { LinkedinUrlEditor } from "./linkedin-url-editor";
 import { ArrowUpRight, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
@@ -56,6 +57,9 @@ export default async function AuthorDetailPage({ params }: { params: { id: strin
           {!author.active && <Badge variant="destructive">Inactive</Badge>}
         </div>
         {author.bio && <p className="mt-1 text-sm text-muted-foreground">{author.bio}</p>}
+        <div className="mt-2">
+          <LinkedinUrlEditor authorId={author.id} initialUrl={author.linkedinUrl ?? null} />
+        </div>
       </header>
 
       <div className="space-y-4 mb-8">

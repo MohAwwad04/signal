@@ -3,7 +3,7 @@
 import { db, schema } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { desc, eq, and, sql, lt, inArray, ilike, or } from "drizzle-orm";
-import { extractLinkedinPostUrn } from "@/lib/linkedin";
+import { extractLinkedinPostUrn, fetchLinkedinAuthoredPosts, getValidLinkedinToken } from "@/lib/linkedin";
 import {
   generatePostsFromTranscript,
   generatePost,
@@ -12,6 +12,7 @@ import {
   learnVoiceFromEdits,
   generateDesignBrief,
   reformatPostWithFramework,
+  analyzeLinkedinPosts,
 } from "@/lib/claude";
 
 /* ========== SIGNALS ========== */
@@ -702,4 +703,57 @@ export async function getDashboardStats() {
       .groupBy(schema.posts.authorId),
   ]);
   return { signalCounts, postCounts, authorCount: authorCount[0]?.count ?? 0, recentPosts, topAuthors };
+}
+
+/* ========== LINKEDIN PROFILE ANALYSIS ========== */
+
+export async function analyzeLinkedinProfileAction(authorId: number): Promise<{
+  ok: boolean;
+  postsFound: number;
+  message: string;
+}> {
+  const [author] = await db.select().from(schema.authors).where(eq(schema.authors.id, authorId));
+  if (!author) throw new Error("Author not found.");
+  if (!author.linkedinAccessToken || !author.linkedinMemberId) {
+    throw new Error("LinkedIn is not connected for this author.");
+  }
+
+  const token = await getValidLinkedinToken(authorId);
+  const posts = await fetchLinkedinAuthoredPosts(token, author.linkedinMemberId);
+
+  if (!posts || posts.length === 0) {
+    return { ok: false, postsFound: 0, message: "No published posts found on LinkedIn, or insufficient API permissions." };
+  }
+
+  const allFrameworks = await db.select({ name: schema.frameworks.name, description: schema.frameworks.description }).from(schema.frameworks);
+  const analysis = await analyzeLinkedinPosts(posts, allFrameworks);
+
+  // Resolve framework names → IDs
+  const allFwRows = await db.select().from(schema.frameworks);
+  const preferredIds = analysis.preferredFrameworkNames
+    .map((name) => allFwRows.find((f) => f.name.toLowerCase() === name.toLowerCase())?.id)
+    .filter((id): id is number => id !== undefined);
+
+  // Only set fields that are currently empty — don't overwrite manually set values
+  const patch: Record<string, unknown> = {};
+  if (!author.voiceProfile && analysis.voiceProfile) patch.voiceProfile = analysis.voiceProfile;
+  if (!author.styleNotes && analysis.styleNotes) patch.styleNotes = analysis.styleNotes;
+  if ((!author.contentAngles || (author.contentAngles as string[]).length === 0) && analysis.contentAngles.length > 0) {
+    patch.contentAngles = analysis.contentAngles;
+  }
+  if ((!author.preferredFrameworks || (author.preferredFrameworks as number[]).length === 0) && preferredIds.length > 0) {
+    patch.preferredFrameworks = preferredIds;
+  }
+
+  if (Object.keys(patch).length > 0) {
+    await db.update(schema.authors).set(patch as any).where(eq(schema.authors.id, authorId));
+  }
+
+  // Upsert content angles into global pool and author join table
+  if (patch.contentAngles) {
+    await updateAuthorContentAnglesAction(authorId, analysis.contentAngles);
+  }
+
+  revalidatePath(`/authors/${authorId}`);
+  return { ok: true, postsFound: posts.length, message: `Analyzed ${posts.length} posts and updated your profile.` };
 }

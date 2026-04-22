@@ -435,6 +435,61 @@ Update the profile. Merge with current where relevant, drop anything contradicte
   });
 }
 
+/* ---------- linkedin post analysis ---------- */
+
+export type LinkedinProfileAnalysis = {
+  contentAngles: string[];
+  preferredFrameworkNames: string[];
+  voiceProfile: string;
+  styleNotes: string;
+};
+
+export async function analyzeLinkedinPosts(
+  posts: string[],
+  availableFrameworks: { name: string; description: string }[]
+): Promise<LinkedinProfileAnalysis> {
+  const postsBlock = posts.map((p, i) => `--- Post ${i + 1} ---\n${p}`).join("\n\n");
+  const frameworkList = availableFrameworks.map((f) => `- ${f.name}: ${f.description}`).join("\n");
+
+  const raw = await textCall({
+    maxTokens: 1500,
+    temperature: 0.3,
+    system: `${GLOBAL_RULES}
+
+You are analyzing an author's real LinkedIn posts to build a writing profile for an AI ghostwriter.
+Your job is to extract patterns the AI can actually use — not generic observations.`,
+    user: `Analyze these LinkedIn posts and return a JSON profile.
+
+AVAILABLE FRAMEWORKS (match the author's natural style to one or more):
+${frameworkList}
+
+POSTS:
+${postsBlock}
+
+Return ONLY valid JSON in this exact shape:
+{
+  "contentAngles": ["topic1", "topic2", ...],
+  "preferredFrameworkNames": ["Framework Name 1", ...],
+  "voiceProfile": "5–10 bullet rules describing the author's writing patterns, tone, sentence length, structure. Concrete and actionable.",
+  "styleNotes": "1–2 sentence summary of the author's overall style and what makes it distinctive."
+}
+
+Rules:
+- contentAngles: 3–8 specific topics this author writes about (e.g. "B2B sales strategy", "founder lessons", "hiring culture")
+- preferredFrameworkNames: 1–3 framework names from the list above that best match how this author naturally structures posts
+- voiceProfile: bullet-style rules, under 200 words total, each rule concrete and directly applicable
+- styleNotes: plain sentence(s), no bullet points`,
+  });
+
+  const parsed = extractJson<LinkedinProfileAnalysis>(raw);
+  return {
+    contentAngles: Array.isArray(parsed.contentAngles) ? parsed.contentAngles : [],
+    preferredFrameworkNames: Array.isArray(parsed.preferredFrameworkNames) ? parsed.preferredFrameworkNames : [],
+    voiceProfile: parsed.voiceProfile ?? "",
+    styleNotes: parsed.styleNotes ?? "",
+  };
+}
+
 /* ---------- design brief ---------- */
 
 export type DesignBriefOutput = {
