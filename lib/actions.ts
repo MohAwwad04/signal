@@ -707,6 +707,39 @@ export async function getDashboardStats() {
 
 /* ========== LINKEDIN PROFILE ANALYSIS ========== */
 
+async function applyLinkedinAnalysis(authorId: number, posts: string[]): Promise<{ postsFound: number; message: string }> {
+  const [author] = await db.select().from(schema.authors).where(eq(schema.authors.id, authorId));
+  if (!author) throw new Error("Author not found.");
+
+  const allFrameworks = await db.select({ name: schema.frameworks.name, description: schema.frameworks.description }).from(schema.frameworks);
+  const analysis = await analyzeLinkedinPosts(posts, allFrameworks);
+
+  const allFwRows = await db.select().from(schema.frameworks);
+  const preferredIds = analysis.preferredFrameworkNames
+    .map((name) => allFwRows.find((f) => f.name.toLowerCase() === name.toLowerCase())?.id)
+    .filter((id): id is number => id !== undefined);
+
+  const patch: Record<string, unknown> = {};
+  if (!author.voiceProfile && analysis.voiceProfile) patch.voiceProfile = analysis.voiceProfile;
+  if (!author.styleNotes && analysis.styleNotes) patch.styleNotes = analysis.styleNotes;
+  if ((!author.contentAngles || (author.contentAngles as string[]).length === 0) && analysis.contentAngles.length > 0) {
+    patch.contentAngles = analysis.contentAngles;
+  }
+  if ((!author.preferredFrameworks || (author.preferredFrameworks as number[]).length === 0) && preferredIds.length > 0) {
+    patch.preferredFrameworks = preferredIds;
+  }
+
+  if (Object.keys(patch).length > 0) {
+    await db.update(schema.authors).set(patch as any).where(eq(schema.authors.id, authorId));
+  }
+  if (patch.contentAngles) {
+    await updateAuthorContentAnglesAction(authorId, analysis.contentAngles);
+  }
+
+  revalidatePath(`/authors/${authorId}`);
+  return { postsFound: posts.length, message: `Analyzed ${posts.length} posts and updated your profile.` };
+}
+
 export async function analyzeLinkedinProfileAction(authorId: number): Promise<{
   ok: boolean;
   postsFound: number;
@@ -722,38 +755,24 @@ export async function analyzeLinkedinProfileAction(authorId: number): Promise<{
   const posts = await fetchLinkedinAuthoredPosts(token, author.linkedinMemberId);
 
   if (!posts || posts.length === 0) {
-    return { ok: false, postsFound: 0, message: "No published posts found on LinkedIn, or insufficient API permissions." };
+    return { ok: false, postsFound: 0, message: "No published posts found via API — try pasting your posts manually below." };
   }
 
-  const allFrameworks = await db.select({ name: schema.frameworks.name, description: schema.frameworks.description }).from(schema.frameworks);
-  const analysis = await analyzeLinkedinPosts(posts, allFrameworks);
+  const result = await applyLinkedinAnalysis(authorId, posts);
+  return { ok: true, ...result };
+}
 
-  // Resolve framework names → IDs
-  const allFwRows = await db.select().from(schema.frameworks);
-  const preferredIds = analysis.preferredFrameworkNames
-    .map((name) => allFwRows.find((f) => f.name.toLowerCase() === name.toLowerCase())?.id)
-    .filter((id): id is number => id !== undefined);
-
-  // Only set fields that are currently empty — don't overwrite manually set values
-  const patch: Record<string, unknown> = {};
-  if (!author.voiceProfile && analysis.voiceProfile) patch.voiceProfile = analysis.voiceProfile;
-  if (!author.styleNotes && analysis.styleNotes) patch.styleNotes = analysis.styleNotes;
-  if ((!author.contentAngles || (author.contentAngles as string[]).length === 0) && analysis.contentAngles.length > 0) {
-    patch.contentAngles = analysis.contentAngles;
+export async function analyzeLinkedinPostsFromTextAction(authorId: number, rawText: string): Promise<string> {
+  if (!rawText || rawText.trim().length < 100) {
+    throw new Error("Please paste at least a few posts (100+ characters).");
   }
-  if ((!author.preferredFrameworks || (author.preferredFrameworks as number[]).length === 0) && preferredIds.length > 0) {
-    patch.preferredFrameworks = preferredIds;
-  }
+  // Split on 3+ newlines or explicit separators
+  const posts = rawText
+    .split(/\n{3,}|(?:\n|^)-{3,}(?:\n|$)/)
+    .map((p) => p.trim())
+    .filter((p) => p.length > 60);
 
-  if (Object.keys(patch).length > 0) {
-    await db.update(schema.authors).set(patch as any).where(eq(schema.authors.id, authorId));
-  }
-
-  // Upsert content angles into global pool and author join table
-  if (patch.contentAngles) {
-    await updateAuthorContentAnglesAction(authorId, analysis.contentAngles);
-  }
-
-  revalidatePath(`/authors/${authorId}`);
-  return { ok: true, postsFound: posts.length, message: `Analyzed ${posts.length} posts and updated your profile.` };
+  const chunks = posts.length > 0 ? posts : [rawText.trim()];
+  const result = await applyLinkedinAnalysis(authorId, chunks);
+  return result.message;
 }
