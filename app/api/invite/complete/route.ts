@@ -12,7 +12,7 @@ function hashToken(s: string) {
 export async function POST(req: NextRequest) {
   const { token, password, name, bio, styleNotes, contentAngles } = await req.json().catch(() => ({}));
 
-  if (!token || !password || !name?.trim()) {
+  if (!token || !password) {
     return NextResponse.json({ error: "Missing required fields." }, { status: 400 });
   }
   if (password.length < 8) {
@@ -31,24 +31,34 @@ export async function POST(req: NextRequest) {
   }
 
   const email = authToken.email;
-  const angles = (contentAngles as string)?.split(",").map((s: string) => s.trim()).filter(Boolean) ?? [];
 
-  // Create author record
+  // Find user role — admins skip profile/author creation
+  const [user] = await db.select({ role: schema.users.role }).from(schema.users).where(eq(schema.users.email, email)).limit(1);
+  const isAdmin = user?.role === "admin" || user?.role === "superadmin";
+
+  let authorId: number | null = null;
+
+  if (!name?.trim()) return NextResponse.json({ error: "Name is required." }, { status: 400 });
+
+  const angles = !isAdmin
+    ? (contentAngles as string)?.split(",").map((s: string) => s.trim()).filter(Boolean) ?? []
+    : [];
+
   const [author] = await db.insert(schema.authors).values({
     name: name.trim(),
-    bio: bio?.trim() || null,
-    styleNotes: styleNotes?.trim() || null,
+    bio: !isAdmin ? (bio?.trim() || null) : null,
+    styleNotes: !isAdmin ? (styleNotes?.trim() || null) : null,
     contentAngles: angles,
     email,
     active: true,
   }).returning();
+  authorId = author.id;
 
-  // Activate user, set password, link author
   await Promise.all([
     db.update(schema.users).set({
       passwordHash: hashPassword(password),
       active: true,
-      authorId: author.id,
+      ...(authorId ? { authorId } : {}),
     }).where(eq(schema.users.email, email)),
     db.update(schema.authTokens).set({ usedAt: new Date() }).where(eq(schema.authTokens.id, authToken.id)),
   ]);

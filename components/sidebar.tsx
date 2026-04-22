@@ -7,13 +7,18 @@ import { LayoutDashboard, Radio, Users, BarChart3, Wrench, Sun, Moon, LogOut, Fi
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/components/theme-provider";
 
-function useUserEmail() {
-  const [email, setEmail] = useState("");
+function useUserIdentity() {
+  const [display, setDisplay] = useState("");
   useEffect(() => {
     const match = document.cookie.match(/(?:^|;\s*)signal_email=([^;]*)/);
-    setEmail(match ? decodeURIComponent(match[1]) : "");
+    const email = match ? decodeURIComponent(match[1]) : "";
+    if (!email) return;
+    fetch("/api/auth/me")
+      .then((r) => r.json())
+      .then((d) => setDisplay(d.name || email))
+      .catch(() => setDisplay(email));
   }, []);
-  return email;
+  return display;
 }
 
 const items = [
@@ -51,7 +56,7 @@ function SignalLogo() {
 export function Sidebar() {
   const pathname = usePathname();
   const { theme, toggle } = useTheme();
-  const email = useUserEmail();
+  const display = useUserIdentity();
 
   return (
     <aside className="hidden md:flex md:flex-col w-64 shrink-0 min-h-screen
@@ -126,7 +131,7 @@ export function Sidebar() {
         </a>
         <div className="px-3 pt-3 pb-1">
           <div className="text-[10px] uppercase tracking-widest mb-0.5 text-gray-400 dark:text-blue-300/25">Logged in as</div>
-          <div className="text-[11px] truncate text-gray-500 dark:text-blue-200/40">{email || "—"}</div>
+          <div className="text-[11px] truncate text-gray-500 dark:text-blue-200/40">{display || "—"}</div>
         </div>
       </div>
     </aside>
