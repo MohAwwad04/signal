@@ -9,6 +9,7 @@ import {
   boolean,
   pgEnum,
   uniqueIndex,
+  index,
   primaryKey,
 } from "drizzle-orm/pg-core";
 
@@ -66,7 +67,10 @@ export const signals = pgTable("signals", {
   notes: text("notes"),
   archivedAt: timestamp("archived_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+}, (t) => ({
+  statusIdx: index("signals_status_idx").on(t.status),
+  createdAtIdx: index("signals_created_at_idx").on(t.createdAt),
+}));
 
 /** People whose voice we're writing in. */
 export const authors = pgTable("authors", {
@@ -152,7 +156,12 @@ export const posts = pgTable("posts", {
   linkedinPostUrn: varchar("linkedin_post_urn", { length: 256 }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
+}, (t) => ({
+  authorIdIdx: index("posts_author_id_idx").on(t.authorId),
+  statusIdx: index("posts_status_idx").on(t.status),
+  authorStatusIdx: index("posts_author_status_idx").on(t.authorId, t.status),
+  createdAtIdx: index("posts_created_at_idx").on(t.createdAt),
+}));
 
 /** Every edit to a post or signal — used to learn each author's voice. */
 export const edits = pgTable("edits", {

@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { cookies } from "next/headers";
 import { db, schema } from "@/lib/db";
 import { eq } from "drizzle-orm";
@@ -11,7 +12,7 @@ export type SessionUser = {
   isAdmin: boolean;
 };
 
-export async function getCurrentUser(): Promise<SessionUser | null> {
+export const getCurrentUser = cache(async (): Promise<SessionUser | null> => {
   const cookieStore = cookies();
   const email = cookieStore.get("signal_email")?.value?.toLowerCase().trim();
   if (!email) return null;
@@ -49,4 +50,4 @@ export async function getCurrentUser(): Promise<SessionUser | null> {
     isSuperAdmin: false,
     isAdmin: role === "admin",
   };
-}
+});
