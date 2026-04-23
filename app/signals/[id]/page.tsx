@@ -31,51 +31,33 @@ export default async function SignalDetailPage({ params }: { params: { id: strin
   if (!signal) notFound();
   if (session?.isAdmin && !session.isSuperAdmin && signal.recommendedAuthorId !== session.authorId) redirect("/signals");
 
-  // Load transcript from dedicated table, fall back to legacy inline field
-  const transcriptText = signal.transcriptId
-    ? await db.select({ content: schema.transcripts.content }).from(schema.transcripts)
-        .where(eq(schema.transcripts.id, signal.transcriptId))
-        .then((r) => r[0]?.content ?? null)
-    : signal.sourceTranscript ?? null;
-
-  // Auto-star best framework for existing signals that don't have one yet
+  // Auto-star best framework for existing signals that don't have one yet (fire-and-forget)
   if (!signal.bestFrameworkId && frameworks.length > 0) {
     const bestFw =
       frameworks.find((f) => ((f.bestFor as string[] | null) ?? []).includes(signal.contentType ?? "")) ??
       frameworks[0];
     if (bestFw) {
-      await db.update(schema.signals).set({ bestFrameworkId: bestFw.id }).where(eq(schema.signals.id, id));
       signal.bestFrameworkId = bestFw.id;
+      db.update(schema.signals).set({ bestFrameworkId: bestFw.id }).where(eq(schema.signals.id, id)).catch(() => {});
     }
   }
 
-  // Auto-score existing signals that haven't been scored yet
-  if (signal.hookStrengthScore == null) {
-    const { scorePost } = await import("@/lib/claude");
-    const scores = await scorePost(signal.rawContent).catch(() => null);
-    if (scores) {
-      await db.update(schema.signals).set({
-        hookStrengthScore: scores.hookStrength,
-        specificityScore: scores.specificity,
-        clarityScore: scores.clarity,
-        emotionalResonanceScore: scores.emotionalResonance,
-        callToActionScore: scores.callToAction,
-      } as any).where(eq(schema.signals.id, id));
-      signal.hookStrengthScore = scores.hookStrength;
-      (signal as any).specificityScore = scores.specificity;
-      (signal as any).clarityScore = scores.clarity;
-      (signal as any).emotionalResonanceScore = scores.emotionalResonance;
-      (signal as any).callToActionScore = scores.callToAction;
-    }
-  }
+  // Load transcript in parallel with posts/analytics
+  const transcriptPromise = signal.transcriptId
+    ? db.select({ content: schema.transcripts.content }).from(schema.transcripts)
+        .where(eq(schema.transcripts.id, signal.transcriptId))
+        .then((r) => r[0]?.content ?? null)
+    : Promise.resolve(signal.sourceTranscript ?? null);
 
   const author = signal.recommendedAuthorId
     ? allAuthors.find((a) => a.id === signal.recommendedAuthorId) ?? null
     : null;
 
-  // Posts for this signal
-  const signalPosts = await db
-    .select({
+  const signalAngles = (signal.contentAngles as string[] | null) ?? [];
+
+  // Fetch posts, transcript, and author angles in parallel
+  const [signalPosts, transcriptText, authorAngles] = await Promise.all([
+    db.select({
       id: schema.posts.id,
       content: schema.posts.content,
       status: schema.posts.status,
@@ -84,46 +66,29 @@ export default async function SignalDetailPage({ params }: { params: { id: strin
       frameworkId: schema.posts.frameworkId,
       contentAngle: schema.posts.contentAngle,
       createdAt: schema.posts.createdAt,
-    })
-    .from(schema.posts)
-    .where(eq(schema.posts.signalId, id))
-    .orderBy(desc(schema.posts.createdAt));
+    }).from(schema.posts).where(eq(schema.posts.signalId, id)).orderBy(desc(schema.posts.createdAt)),
+    transcriptPromise,
+    author
+      ? db.select({ name: schema.contentAngles.name })
+          .from(schema.authorContentAngles)
+          .innerJoin(schema.contentAngles, eq(schema.authorContentAngles.contentAngleId, schema.contentAngles.id))
+          .where(eq(schema.authorContentAngles.authorId, author.id))
+          .then((r) => r.map((x) => x.name))
+      : Promise.resolve([] as string[]),
+  ]);
 
-  // Analytics for this signal's posts
+  // Analytics fetched in parallel with posts processing
   const postIds = signalPosts.map((p) => p.id);
   const analyticsRows = postIds.length > 0
-    ? await db
-        .select({
-          impressions: sql<number>`coalesce(sum(${schema.analytics.impressions}), 0)::int`,
-          likes: sql<number>`coalesce(sum(${schema.analytics.likes}), 0)::int`,
-          comments: sql<number>`coalesce(sum(${schema.analytics.comments}), 0)::int`,
-          shares: sql<number>`coalesce(sum(${schema.analytics.shares}), 0)::int`,
-        })
-        .from(schema.analytics)
-        .where(inArray(schema.analytics.postId, postIds))
+    ? await db.select({
+        impressions: sql<number>`coalesce(sum(${schema.analytics.impressions}), 0)::int`,
+        likes: sql<number>`coalesce(sum(${schema.analytics.likes}), 0)::int`,
+        comments: sql<number>`coalesce(sum(${schema.analytics.comments}), 0)::int`,
+        shares: sql<number>`coalesce(sum(${schema.analytics.shares}), 0)::int`,
+      }).from(schema.analytics).where(inArray(schema.analytics.postId, postIds))
     : [];
 
   const totalAnalytics = analyticsRows[0] ?? { impressions: 0, likes: 0, comments: 0, shares: 0 };
-
-  // Best quality post for stats display
-  const bestPost = signalPosts.length > 0
-    ? signalPosts.reduce((best, p) => {
-        const score = (p.hookStrengthScore ?? 0) + (p.specificityScore ?? 0);
-        const bestScore = (best.hookStrengthScore ?? 0) + (best.specificityScore ?? 0);
-        return score > bestScore ? p : best;
-      })
-    : null;
-
-  // Content angles for the generate form: signal angles + author angles + all global angles
-  const signalAngles = (signal.contentAngles as string[] | null) ?? [];
-  const authorAngles = author
-    ? ((await db
-        .select({ name: schema.contentAngles.name })
-        .from(schema.authorContentAngles)
-        .innerJoin(schema.contentAngles, eq(schema.authorContentAngles.contentAngleId, schema.contentAngles.id))
-        .where(eq(schema.authorContentAngles.authorId, author.id))
-      ).map((r) => r.name))
-    : [];
   const allAngleNames = Array.from(new Set([...signalAngles, ...authorAngles, ...allAngles.map((a) => a.name)]));
 
   const frameworksForEditor = frameworks.map((f) => ({
