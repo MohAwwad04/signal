@@ -1,5 +1,4 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { hashToken } from "@/lib/auth";
 
 const PUBLIC_PATHS = [
   "/login",
@@ -19,10 +18,7 @@ export function middleware(req: NextRequest) {
   if (pathname.startsWith("/_next") || pathname.startsWith("/favicon")) return NextResponse.next();
 
   const cookie = req.cookies.get("signal_auth")?.value;
-  const expected = process.env.AUTH_SECRET;
-  // If AUTH_SECRET isn't set, allow everything (dev mode).
-  if (!expected) return NextResponse.next();
-  if (cookie && cookie === hashToken(expected)) return NextResponse.next();
+  if (cookie) return NextResponse.next();
 
   const url = req.nextUrl.clone();
   url.pathname = "/login";
