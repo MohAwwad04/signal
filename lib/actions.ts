@@ -658,7 +658,9 @@ export async function submitForReviewAction(postId: number) {
 }
 
 export async function approvePostAction(postId: number, notes?: string) {
-  await requireAdmin();
+  const session = await requireAuth();
+  const [post] = await db.select({ authorId: schema.posts.authorId }).from(schema.posts).where(eq(schema.posts.id, postId));
+  if (!session.isAdmin && session.authorId !== post?.authorId) throw new Error("Not authorised.");
   await db
     .update(schema.posts)
     .set({ status: "approved", reviewerNotes: notes ?? null, updatedAt: new Date() })
@@ -678,7 +680,9 @@ export async function reopenPostAction(postId: number) {
 }
 
 export async function rejectPostAction(postId: number, notes: string) {
-  await requireAdmin();
+  const session = await requireAuth();
+  const [post] = await db.select({ authorId: schema.posts.authorId }).from(schema.posts).where(eq(schema.posts.id, postId));
+  if (!session.isAdmin && session.authorId !== post?.authorId) throw new Error("Not authorised.");
   await db
     .update(schema.posts)
     .set({ status: "rejected", reviewerNotes: notes, updatedAt: new Date() })

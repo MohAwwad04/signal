@@ -89,6 +89,8 @@ export function PostEditor({
       await approvePostAction(post.id);
       toast({ title: "Approved", kind: "success" });
       startTransition(() => router.refresh());
+    } catch (e: any) {
+      toast({ title: "Failed to approve", description: e?.message, kind: "error" });
     } finally {
       setLoading(null);
     }
@@ -114,6 +116,8 @@ export function PostEditor({
       setShowRejectInput(false);
       setRejectNotes("");
       startTransition(() => router.refresh());
+    } catch (e: any) {
+      toast({ title: "Failed to reject", description: e?.message, kind: "error" });
     } finally {
       setLoading(null);
     }
