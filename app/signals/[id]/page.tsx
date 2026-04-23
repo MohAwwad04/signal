@@ -29,6 +29,7 @@ export default async function SignalDetailPage({ params }: { params: { id: strin
   ]);
 
   if (!signal) notFound();
+  if (session?.isAdmin && !session.isSuperAdmin && signal.recommendedAuthorId !== session.authorId) redirect("/signals");
 
   // Load transcript from dedicated table, fall back to legacy inline field
   const transcriptText = signal.transcriptId

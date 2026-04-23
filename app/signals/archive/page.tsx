@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { db, schema } from "@/lib/db";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and } from "drizzle-orm";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Archive } from "lucide-react";
@@ -15,12 +15,14 @@ export const revalidate = 0;
 export default async function ArchivePage() {
   const session = await getCurrentUser();
   if (!session?.isAdmin && !session?.isSuperAdmin) redirect("/drafts");
+  const archiveFilter = session?.isSuperAdmin
+    ? eq(schema.signals.status, "archived")
+    : and(eq(schema.signals.status, "archived"), session?.authorId
+        ? eq(schema.signals.recommendedAuthorId, session.authorId)
+        : eq(schema.signals.id, -1));
+
   const [archived, authors] = await Promise.all([
-    db
-      .select()
-      .from(schema.signals)
-      .where(eq(schema.signals.status, "archived"))
-      .orderBy(desc(schema.signals.archivedAt)),
+    db.select().from(schema.signals).where(archiveFilter).orderBy(desc(schema.signals.archivedAt)),
     db.select({ id: schema.authors.id, name: schema.authors.name }).from(schema.authors),
   ]);
 
