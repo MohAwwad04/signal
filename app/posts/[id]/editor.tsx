@@ -28,11 +28,13 @@ export function PostEditor({
   author,
   brief: initialBrief,
   canApprove,
+  canSubmitForReview,
 }: {
   post: Post;
   author: Author | null;
   brief: DesignBrief | null;
   canApprove: boolean;
+  canSubmitForReview: boolean;
 }) {
   const router = useRouter();
   const [text, setText] = useState(post.content);
@@ -178,7 +180,7 @@ export function PostEditor({
           <h1 className="text-2xl font-bold tracking-tight">Post #{post.id}</h1>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
-          {post.status === "draft" && (
+          {post.status === "draft" && canSubmitForReview && (
             <Button onClick={submit} disabled={loading === "submit"}>
               {loading === "submit" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
               Send for review
