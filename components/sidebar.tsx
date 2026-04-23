@@ -3,7 +3,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { LayoutDashboard, Radio, Users, BarChart3, Wrench, Sun, Moon, LogOut, FileEdit, Settings } from "lucide-react";
+import { LayoutDashboard, Radio, Users, BarChart3, Wrench, Sun, Moon, LogOut, FileEdit, Settings, Home } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/components/theme-provider";
 
@@ -21,6 +21,7 @@ function useUserIdentity(): Identity {
 }
 
 const ADMIN_ITEMS = [
+  { href: "/home",       label: "Home",       icon: Home },
   { href: "/",           label: "Dashboard",  icon: LayoutDashboard },
   { href: "/signals",    label: "Signals",    icon: Radio },
   { href: "/drafts",     label: "Drafts",     icon: FileEdit },
@@ -31,6 +32,7 @@ const ADMIN_ITEMS = [
 ];
 
 const USER_ITEMS = [
+  { href: "/home",     label: "Home",      icon: Home },
   { href: "/",         label: "Dashboard", icon: LayoutDashboard },
   { href: "/drafts",   label: "My posts",  icon: FileEdit },
   { href: "/settings", label: "Settings",  icon: Settings },
@@ -87,7 +89,9 @@ export function Sidebar() {
       <nav className="flex flex-1 flex-col gap-1 p-3 pt-4">
         {items.map((item) => {
           const Icon = item.icon;
-          const active = item.href === "/" ? pathname === "/" : pathname?.startsWith(item.href);
+          const active = (item.href === "/" || item.href === "/home")
+            ? pathname === item.href
+            : pathname?.startsWith(item.href);
           return (
             <Link
               key={item.href}
