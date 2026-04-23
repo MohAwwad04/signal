@@ -27,10 +27,12 @@ export function PostEditor({
   post,
   author,
   brief: initialBrief,
+  canApprove,
 }: {
   post: Post;
   author: Author | null;
   brief: DesignBrief | null;
+  canApprove: boolean;
 }) {
   const router = useRouter();
   const [text, setText] = useState(post.content);
@@ -182,7 +184,7 @@ export function PostEditor({
               Send for review
             </Button>
           )}
-          {post.status === "in_review" && (
+          {post.status === "in_review" && canApprove && (
             <>
               {showRejectInput ? (
                 <div className="flex items-center gap-2">

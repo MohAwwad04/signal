@@ -2,12 +2,14 @@ import { notFound } from "next/navigation";
 import { db, schema } from "@/lib/db";
 import { eq } from "drizzle-orm";
 import { PostEditor } from "./editor";
+import { getCurrentUser } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export default async function PostPage({ params }: { params: { id: string } }) {
   const id = Number(params.id);
+  const session = await getCurrentUser();
   const [post] = await db.select().from(schema.posts).where(eq(schema.posts.id, id));
   if (!post) notFound();
   const [author] = post.authorId
@@ -15,5 +17,7 @@ export default async function PostPage({ params }: { params: { id: string } }) {
     : [null];
   const brief = (await db.select().from(schema.designBriefs).where(eq(schema.designBriefs.postId, id)))[0] ?? null;
 
-  return <PostEditor post={post} author={author} brief={brief} />;
+  const canApprove = !session?.isAdmin || session.isSuperAdmin;
+
+  return <PostEditor post={post} author={author} brief={brief} canApprove={canApprove} />;
 }
