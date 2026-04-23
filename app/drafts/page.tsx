@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { db, schema } from "@/lib/db";
 import { desc, eq, inArray, sql, and } from "drizzle-orm";
 import { Badge } from "@/components/ui/badge";
@@ -28,7 +29,8 @@ const USER_TABS: TabDef[] = [
 
 export default async function DraftsPage({ searchParams }: { searchParams: { tab?: string } }) {
   const session = await getCurrentUser();
-  const isRegularUser = !session?.isAdmin && !session?.isSuperAdmin;
+  if (!session) redirect("/login");
+  const isRegularUser = !session.isAdmin && !session.isSuperAdmin;
   const scopedAuthorId = isRegularUser ? (session?.authorId ?? null) : null;
 
   const tabs = isRegularUser ? USER_TABS : ADMIN_TABS;

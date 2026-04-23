@@ -1,7 +1,7 @@
 import { cache } from "react";
 import { cookies } from "next/headers";
 import { db, schema } from "@/lib/db";
-import { eq, and, gt } from "drizzle-orm";
+import { eq, and, gt, desc } from "drizzle-orm";
 import { SUPERADMIN_EMAIL } from "@/lib/auth";
 
 export type SessionUser = {
@@ -18,23 +18,18 @@ export const getCurrentUser = cache(async (): Promise<SessionUser | null> => {
   const sessionToken = cookieStore.get("signal_auth")?.value;
   if (!email) return null;
 
-  // Validate session token against DB (single-session enforcement + expiry)
-  if (sessionToken) {
-    const [session] = await db
-      .select()
-      .from(schema.sessions)
-      .where(and(
-        eq(schema.sessions.token, sessionToken),
-        eq(schema.sessions.email, email),
-        gt(schema.sessions.expiresAt, new Date()),
-      ))
-      .limit(1)
-      .catch(() => []);
-    if (!session) return null;
-  } else {
-    // No session token = not logged in
-    return null;
-  }
+  if (!sessionToken) return null;
+
+  // Single-session: find the latest valid session for this email and reject if it's not this token
+  const [latestSession] = await db
+    .select()
+    .from(schema.sessions)
+    .where(and(eq(schema.sessions.email, email), gt(schema.sessions.expiresAt, new Date())))
+    .orderBy(desc(schema.sessions.createdAt))
+    .limit(1)
+    .catch(() => []);
+
+  if (!latestSession || latestSession.token !== sessionToken) return null;
 
   // Hardcoded superadmin
   if (email === SUPERADMIN_EMAIL) {
