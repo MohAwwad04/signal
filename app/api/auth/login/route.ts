@@ -2,14 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { db, schema } from "@/lib/db";
 import { eq } from "drizzle-orm";
 import { verifyPassword } from "@/lib/password";
-
-function hashToken(s: string) {
-  let h = 5381;
-  for (let i = 0; i < s.length; i++) h = ((h << 5) + h) ^ s.charCodeAt(i);
-  return `h_${(h >>> 0).toString(36)}`;
-}
-
-const SUPERADMIN = "moh.awwad243@gmail.com";
+import { hashToken, SUPERADMIN_EMAIL } from "@/lib/auth";
 
 export async function POST(req: NextRequest) {
   const { email, password } = await req.json().catch(() => ({}));
@@ -22,7 +15,7 @@ export async function POST(req: NextRequest) {
   const envAdmins = (process.env.ALLOWED_EMAILS ?? "")
     .split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
 
-  const isEnvAdmin = normalizedEmail === SUPERADMIN || envAdmins.includes(normalizedEmail);
+  const isEnvAdmin = normalizedEmail === SUPERADMIN_EMAIL || envAdmins.includes(normalizedEmail);
 
   if (isEnvAdmin) {
     // Env admins use the shared AUTH_SECRET
@@ -43,6 +36,6 @@ export async function POST(req: NextRequest) {
   const res = NextResponse.json({ ok: true });
   const cookieOpts = { sameSite: "lax" as const, secure: process.env.NODE_ENV === "production", path: "/", maxAge: 60 * 60 * 24 * 30 };
   res.cookies.set("signal_auth", hashToken(secret), { ...cookieOpts, httpOnly: true });
-  res.cookies.set("signal_email", normalizedEmail, cookieOpts);
+  res.cookies.set("signal_email", normalizedEmail, { ...cookieOpts, httpOnly: true });
   return res;
 }

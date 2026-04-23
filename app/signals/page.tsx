@@ -44,7 +44,7 @@ export default async function SignalsPage({
   if (angle) conditions.push(sql`${schema.signals.contentAngles} @> ${JSON.stringify([angle])}::jsonb`);
 
   const [signals, authors, allAngles, archivedCount] = await Promise.all([
-    db.select().from(schema.signals).where(and(...conditions)).orderBy(desc(schema.signals.createdAt)),
+    db.select().from(schema.signals).where(and(...conditions)).orderBy(desc(schema.signals.createdAt)).limit(200),
     db.select({ id: schema.authors.id, name: schema.authors.name }).from(schema.authors).where(eq(schema.authors.active, true)),
     db.select({ id: schema.contentAngles.id, name: schema.contentAngles.name }).from(schema.contentAngles).orderBy(schema.contentAngles.name),
     db.select({ id: schema.signals.id }).from(schema.signals).where(eq(schema.signals.status, "archived")).then((r) => r.length),

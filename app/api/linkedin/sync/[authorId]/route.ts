@@ -38,48 +38,33 @@ export async function POST(
     );
 
   const linkedPosts = posts.filter((p) => p.linkedinPostUrn);
-  let synced = 0;
 
-  for (const post of linkedPosts) {
-    const metrics = await fetchLinkedinPostMetrics(token, post.linkedinPostUrn!);
-    if (!metrics) continue;
+  const syncResults = await Promise.allSettled(
+    linkedPosts.map(async (post) => {
+      const metrics = await fetchLinkedinPostMetrics(token, post.linkedinPostUrn!);
+      if (!metrics) return false;
 
-    // Find existing linkedin-sourced analytics row for this post
-    const [existing] = await db
-      .select()
-      .from(schema.analytics)
-      .where(
-        and(
-          eq(schema.analytics.postId, post.id),
-          eq(schema.analytics.source, "linkedin")
-        )
-      );
+      const [existing] = await db
+        .select()
+        .from(schema.analytics)
+        .where(and(eq(schema.analytics.postId, post.id), eq(schema.analytics.source, "linkedin")));
 
-    if (existing) {
-      await db
-        .update(schema.analytics)
-        .set({
-          impressions: metrics.impressions,
-          likes: metrics.likes,
-          comments: metrics.comments,
-          shares: metrics.shares,
-          capturedAt: new Date(),
-        })
-        .where(eq(schema.analytics.id, existing.id));
-    } else {
-      await db.insert(schema.analytics).values({
-        postId: post.id,
-        impressions: metrics.impressions,
-        likes: metrics.likes,
-        comments: metrics.comments,
-        shares: metrics.shares,
-        clicks: 0,
-        source: "linkedin",
-      });
-    }
+      if (existing) {
+        await db
+          .update(schema.analytics)
+          .set({ impressions: metrics.impressions, likes: metrics.likes, comments: metrics.comments, shares: metrics.shares, capturedAt: new Date() })
+          .where(eq(schema.analytics.id, existing.id));
+      } else {
+        await db.insert(schema.analytics).values({
+          postId: post.id, impressions: metrics.impressions, likes: metrics.likes,
+          comments: metrics.comments, shares: metrics.shares, clicks: 0, source: "linkedin",
+        });
+      }
+      return true;
+    })
+  );
 
-    synced++;
-  }
+  const synced = syncResults.filter((r) => r.status === "fulfilled" && r.value).length;
 
   await db
     .update(schema.authors)

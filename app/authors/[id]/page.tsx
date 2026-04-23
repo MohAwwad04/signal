@@ -32,7 +32,7 @@ export default async function AuthorDetailPage({ params }: { params: { id: strin
     : [];
 
   const [posts, recentEdits, allGlobalAngles] = await Promise.all([
-    db.select().from(schema.posts).where(eq(schema.posts.authorId, id)).orderBy(desc(schema.posts.updatedAt)),
+    db.select().from(schema.posts).where(eq(schema.posts.authorId, id)).orderBy(desc(schema.posts.updatedAt)).limit(200),
     db.select().from(schema.edits).where(eq(schema.edits.authorId, id)).orderBy(desc(schema.edits.createdAt)).limit(5),
     db.select({ id: schema.contentAngles.id, name: schema.contentAngles.name }).from(schema.contentAngles).orderBy(schema.contentAngles.name),
   ]);

@@ -45,6 +45,7 @@ export default async function DraftsPage({ searchParams }: { searchParams: { tab
     .from(schema.posts)
     .where(authorCondition ? and(statusCondition, authorCondition) : statusCondition)
     .orderBy(desc(schema.posts.updatedAt))
+    .limit(200)
     .catch(() => []);
 
   const authorIds = [...new Set(posts.map((p) => p.authorId).filter(Boolean) as number[])];

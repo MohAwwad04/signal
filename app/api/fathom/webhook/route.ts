@@ -12,10 +12,9 @@ import { extractSignalsAction } from "@/lib/actions";
  */
 export async function POST(req: NextRequest) {
   const secret = process.env.FATHOM_WEBHOOK_SECRET;
-  if (secret) {
-    const provided = req.headers.get("x-webhook-secret");
-    if (provided !== secret) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  }
+  if (!secret) return NextResponse.json({ error: "webhook not configured" }, { status: 503 });
+  const provided = req.headers.get("x-webhook-secret");
+  if (provided !== secret) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   const body = await req.json().catch(() => ({}));
   const payload = body?.meeting ?? body ?? {};

@@ -12,13 +12,10 @@ type Identity = { display: string; isAdmin: boolean };
 function useUserIdentity(): Identity {
   const [identity, setIdentity] = useState<Identity>({ display: "", isAdmin: false });
   useEffect(() => {
-    const match = document.cookie.match(/(?:^|;\s*)signal_email=([^;]*)/);
-    const email = match ? decodeURIComponent(match[1]) : "";
-    if (!email) return;
     fetch("/api/auth/me")
       .then((r) => r.json())
-      .then((d) => setIdentity({ display: d.name || email, isAdmin: !!d.isAdmin || !!d.isSuperAdmin }))
-      .catch(() => setIdentity({ display: email, isAdmin: false }));
+      .then((d) => { if (d.name) setIdentity({ display: d.name, isAdmin: !!d.isAdmin || !!d.isSuperAdmin }); })
+      .catch(() => {});
   }, []);
   return identity;
 }

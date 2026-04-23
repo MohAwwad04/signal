@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
   const deleted = await db
     .delete(schema.signals)
     .where(and(eq(schema.signals.status, "archived"), lt(schema.signals.archivedAt, cutoff)))

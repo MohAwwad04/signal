@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { hashToken } from "@/lib/auth";
 
 const PUBLIC_PATHS = [
   "/login",
@@ -27,13 +28,6 @@ export function middleware(req: NextRequest) {
   url.pathname = "/login";
   url.searchParams.set("next", pathname);
   return NextResponse.redirect(url);
-}
-
-// Edge-runtime safe quick hash (not security-grade, just obfuscation — app is small-team)
-function hashToken(s: string) {
-  let h = 5381;
-  for (let i = 0; i < s.length; i++) h = ((h << 5) + h) ^ s.charCodeAt(i);
-  return `h_${(h >>> 0).toString(36)}`;
 }
 
 export const config = {

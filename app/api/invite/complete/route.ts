@@ -2,12 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { db, schema } from "@/lib/db";
 import { eq, and, gt, isNull } from "drizzle-orm";
 import { hashPassword } from "@/lib/password";
-
-function hashToken(s: string) {
-  let h = 5381;
-  for (let i = 0; i < s.length; i++) h = ((h << 5) + h) ^ s.charCodeAt(i);
-  return `h_${(h >>> 0).toString(36)}`;
-}
+import { hashToken } from "@/lib/auth";
 
 export async function POST(req: NextRequest) {
   const { token, password, name, bio, styleNotes, contentAngles, linkedinUrl } = await req.json().catch(() => ({}));
@@ -69,6 +64,6 @@ export async function POST(req: NextRequest) {
   const res = NextResponse.json({ ok: true });
   const cookieOpts = { sameSite: "lax" as const, secure: process.env.NODE_ENV === "production", path: "/", maxAge: 60 * 60 * 24 * 30 };
   res.cookies.set("signal_auth", hashToken(secret), { ...cookieOpts, httpOnly: true });
-  res.cookies.set("signal_email", email, cookieOpts);
+  res.cookies.set("signal_email", email, { ...cookieOpts, httpOnly: true });
   return res;
 }

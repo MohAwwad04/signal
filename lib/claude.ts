@@ -32,16 +32,26 @@ async function textCall(opts: {
   temperature?: number;
 }) {
   const anthropic = client();
-  const msg = await anthropic.messages.create({
-    model: MODEL,
-    max_tokens: opts.maxTokens ?? 2048,
-    temperature: opts.temperature ?? 0.7,
-    system: opts.system,
-    messages: [{ role: "user", content: opts.user }],
-  });
-  const block = msg.content[0];
-  if (!block || block.type !== "text") return "";
-  return block.text;
+  let lastErr: unknown;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt > 0) await new Promise((r) => setTimeout(r, 1000 * attempt));
+    try {
+      const msg = await anthropic.messages.create({
+        model: MODEL,
+        max_tokens: opts.maxTokens ?? 2048,
+        temperature: opts.temperature ?? 0.7,
+        system: opts.system,
+        messages: [{ role: "user", content: opts.user }],
+      });
+      const block = msg.content[0];
+      if (!block || block.type !== "text") return "";
+      return block.text;
+    } catch (err: any) {
+      lastErr = err;
+      if (err?.status && err.status < 500) throw err; // don't retry 4xx
+    }
+  }
+  throw lastErr;
 }
 
 function extractJson<T>(raw: string): T {

@@ -1,10 +1,11 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { db, schema } from "@/lib/db";
 import { isNotNull, eq, inArray } from "drizzle-orm";
-import { getValidFathomToken, fetchFathomMeetings } from "@/lib/fathom";
+import { getValidGoogleToken, fetchGoogleMeetTranscripts } from "@/lib/google";
 import { generatePostsFromTranscript } from "@/lib/claude";
+import { revalidatePath } from "next/cache";
 
-export const maxDuration = 300; // 5 min for Vercel Pro
+export const maxDuration = 300;
 
 export async function GET(req: NextRequest) {
   const authHeader = req.headers.get("authorization");
@@ -16,12 +17,13 @@ export async function GET(req: NextRequest) {
   const connectedAuthors = await db
     .select()
     .from(schema.authors)
-    .where(isNotNull(schema.authors.fathomAccessToken));
+    .where(isNotNull(schema.authors.googleAccessToken));
 
   const [allAuthors, allFrameworks] = await Promise.all([
     db.select().from(schema.authors).where(eq(schema.authors.active, true)),
     db.select().from(schema.frameworks),
   ]);
+
   const authorContexts = allAuthors.map((a) => ({
     role: a.role ?? "",
     contentAngles: (a.contentAngles as string[] | null) ?? [],
@@ -33,26 +35,33 @@ export async function GET(req: NextRequest) {
 
   const results = await Promise.allSettled(
     connectedAuthors.map(async (author) => {
-      const token = await getValidFathomToken(author.id);
-      const meetings = await fetchFathomMeetings(token, 10);
+      const token = await getValidGoogleToken(author.id);
+      const meetings = await fetchGoogleMeetTranscripts(token, 10);
+      if (!meetings.length) return { authorId: author.id, synced: 0 };
 
-      const meetingIds = meetings.map((m) => m.id).filter(Boolean);
-      const existing = meetingIds.length
-        ? await db
-            .select({ sourceMeetingId: schema.signals.sourceMeetingId })
-            .from(schema.signals)
-            .where(inArray(schema.signals.sourceMeetingId, meetingIds))
+      const fileIds = meetings.map((m) => m.id);
+      const existingTranscripts = fileIds.length
+        ? await db.select({ sourceMeetingId: schema.transcripts.sourceMeetingId })
+            .from(schema.transcripts)
+            .where(inArray(schema.transcripts.sourceMeetingId, fileIds))
         : [];
-      const existingIds = new Set(existing.map((e) => e.sourceMeetingId));
+      const existingIds = new Set(existingTranscripts.map((t) => t.sourceMeetingId));
+      const newMeetings = meetings.filter((m) => !existingIds.has(m.id));
 
-      const newMeetings = meetings.filter(
-        (m) => m.id && !existingIds.has(m.id) && m.transcript.length >= 100
-      );
+      let synced = 0;
+      for (const meeting of newMeetings) {
+        try {
+          const [transcriptRow] = await db.insert(schema.transcripts).values({
+            title: meeting.title,
+            content: meeting.transcript,
+            source: "google_meet",
+            sourceMeetingId: meeting.id,
+            sourceMeetingDate: meeting.date ? new Date(meeting.date) : null,
+          }).returning();
 
-      const meetingResults = await Promise.allSettled(
-        newMeetings.map(async (meeting) => {
           const generated = await generatePostsFromTranscript(meeting.transcript, authorContexts);
-          if (!generated.length) return 0;
+          if (!generated.length) continue;
+
           const rows = generated.map((s) => {
             const recAuthor = s.recommendedAuthorRole
               ? allAuthors.find((a) => a.role?.toLowerCase() === s.recommendedAuthorRole?.toLowerCase())
@@ -67,26 +76,23 @@ export async function GET(req: NextRequest) {
               contentAngles: s.contentAngle ? [s.contentAngle] : [] as string[],
               recommendedAuthorId: recAuthor?.id ?? author.id,
               bestFrameworkId: recFramework?.id ?? null,
-              source: "fathom" as const,
+              source: "google_meet" as const,
               sourceMeetingId: meeting.id,
               sourceMeetingTitle: meeting.title,
               sourceMeetingDate: meeting.date ? new Date(meeting.date) : null,
+              transcriptId: transcriptRow.id,
+              sourceExcerpt: s.sourceExcerpt ?? null,
             };
           });
+
           const inserted = await db.insert(schema.signals).values(rows).returning();
-          return inserted.length;
-        })
-      );
+          synced += inserted.length;
+        } catch {
+          // skip failed meetings
+        }
+      }
 
-      const synced = meetingResults.reduce(
-        (sum, r) => sum + (r.status === "fulfilled" ? r.value : 0), 0
-      );
-
-      await db
-        .update(schema.authors)
-        .set({ fathomLastSyncedAt: new Date() })
-        .where(eq(schema.authors.id, author.id));
-
+      await db.update(schema.authors).set({ googleLastSyncedAt: new Date() }).where(eq(schema.authors.id, author.id));
       return { authorId: author.id, synced };
     })
   );
@@ -96,6 +102,12 @@ export async function GET(req: NextRequest) {
       ? r.value
       : { authorId: -1, synced: 0, error: (r.reason as Error)?.message ?? "sync failed" }
   );
+
+  const totalSynced = formatted.reduce((sum, r) => sum + (r.synced ?? 0), 0);
+  if (totalSynced > 0) {
+    revalidatePath("/signals");
+    revalidatePath("/");
+  }
 
   return NextResponse.json({ ok: true, results: formatted });
 }

@@ -14,6 +14,7 @@ import {
   updatePostContentAction,
   submitForReviewAction,
   approvePostAction,
+  reopenPostAction,
   rejectPostAction,
   markPublishedAction,
   generateDesignBriefAction,
@@ -87,6 +88,17 @@ export function PostEditor({
     try {
       await approvePostAction(post.id);
       toast({ title: "Approved", kind: "success" });
+      startTransition(() => router.refresh());
+    } finally {
+      setLoading(null);
+    }
+  }
+
+  async function reopen() {
+    setLoading("reopen");
+    try {
+      await reopenPostAction(post.id);
+      toast({ title: "Post re-opened for editing", kind: "info" });
       startTransition(() => router.refresh());
     } finally {
       setLoading(null);
@@ -198,6 +210,12 @@ export function PostEditor({
               </Button>
             </>
           )}
+          {post.status === "rejected" && (
+            <Button variant="outline" onClick={reopen} disabled={loading === "reopen"}>
+              {loading === "reopen" ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileEdit className="h-4 w-4" />}
+              Re-open
+            </Button>
+          )}
           {post.status === "approved" && (
             <div className="flex items-center gap-2">
               <Input
@@ -308,7 +326,10 @@ export function PostEditor({
                   {brief.svg && (
                     <div>
                       <div className="mb-1.5 text-xs font-medium text-muted-foreground">SVG mock</div>
-                      <div className="overflow-hidden rounded-xl border" dangerouslySetInnerHTML={{ __html: brief.svg }} />
+                      <div className="overflow-hidden rounded-xl border">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={`data:image/svg+xml;base64,${btoa(brief.svg)}`} alt="Design mock" className="w-full" />
+                      </div>
                     </div>
                   )}
                 </CardContent>
@@ -353,6 +374,9 @@ export function PostEditor({
             <CardContent className="space-y-3">
               <ScoreBar label="Hook strength" value={post.hookStrengthScore ?? 0} />
               <ScoreBar label="Specificity" value={post.specificityScore ?? 0} />
+              <ScoreBar label="Clarity" value={post.clarityScore ?? 0} />
+              <ScoreBar label="Emotional resonance" value={post.emotionalResonanceScore ?? 0} />
+              <ScoreBar label="Call to action" value={post.callToActionScore ?? 0} />
             </CardContent>
           </Card>
           {post.reviewerNotes && (

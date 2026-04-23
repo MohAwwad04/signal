@@ -3,6 +3,19 @@
 import { db, schema } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { desc, eq, and, sql, lt, inArray, ilike, or } from "drizzle-orm";
+import { getCurrentUser } from "@/lib/session";
+
+async function requireAuth() {
+  const s = await getCurrentUser();
+  if (!s) throw new Error("Not authenticated.");
+  return s;
+}
+
+async function requireAdmin() {
+  const s = await getCurrentUser();
+  if (!s?.isAdmin) throw new Error("Not authorised.");
+  return s;
+}
 import { extractLinkedinPostUrn, fetchLinkedinAuthoredPosts, getValidLinkedinToken, fetchLinkedinVanityName } from "@/lib/linkedin";
 import {
   generatePostsFromTranscript,
@@ -111,6 +124,7 @@ export async function createManualSignalAction(data: {
   hashtags: string[];
   authorId?: number | null;
 }) {
+  await requireAuth();
   if (!data.content || data.content.trim().length < 20) {
     throw new Error("Signal content is too short.");
   }
@@ -129,6 +143,7 @@ export async function createManualSignalAction(data: {
 }
 
 export async function updateSignalContentAction(id: number, content: string) {
+  await requireAuth();
   const [current] = await db.select().from(schema.signals).where(eq(schema.signals.id, id));
   if (!current || current.rawContent === content) return;
 
@@ -172,6 +187,7 @@ export async function createSignalAction(input: {
   speaker?: string;
   notes?: string;
 }) {
+  await requireAuth();
   const [row] = await db
     .insert(schema.signals)
     .values({
@@ -209,6 +225,7 @@ export async function createSignalAction(input: {
 }
 
 export async function scoreSignalAction(id: number) {
+  await requireAuth();
   const [signal] = await db.select().from(schema.signals).where(eq(schema.signals.id, id));
   if (!signal) throw new Error("Signal not found.");
   const scores = await scorePost(signal.rawContent);
@@ -226,40 +243,47 @@ export async function scoreSignalAction(id: number) {
 }
 
 export async function updateSignalAuthorAction(id: number, authorId: number | null) {
+  await requireAdmin();
   await db.update(schema.signals).set({ recommendedAuthorId: authorId }).where(eq(schema.signals.id, id));
   revalidatePath(`/signals/${id}`);
   revalidatePath("/signals");
 }
 
 export async function updateSignalBestFrameworkAction(id: number, frameworkId: number | null) {
+  await requireAdmin();
   await db.update(schema.signals).set({ bestFrameworkId: frameworkId }).where(eq(schema.signals.id, id));
   revalidatePath(`/signals/${id}`);
 }
 
 export async function updateSignalContentAnglesAction(id: number, angles: string[]) {
+  await requireAdmin();
   await db.update(schema.signals).set({ contentAngles: angles } as any).where(eq(schema.signals.id, id));
   revalidatePath(`/signals/${id}`);
   revalidatePath("/signals");
 }
 
 export async function applyFrameworkToSignalAction(content: string, frameworkId: number): Promise<string> {
+  await requireAuth();
   const [framework] = await db.select().from(schema.frameworks).where(eq(schema.frameworks.id, frameworkId));
   if (!framework) throw new Error("Framework not found.");
   return reformatPostWithFramework(content, framework);
 }
 
 export async function archiveSignalAction(id: number) {
+  await requireAuth();
   await db.update(schema.signals).set({ status: "archived", archivedAt: new Date() }).where(eq(schema.signals.id, id));
   revalidatePath("/signals");
   revalidatePath("/signals/archive");
 }
 
 export async function deleteSignalPermanentlyAction(id: number) {
+  await requireAdmin();
   await db.delete(schema.signals).where(eq(schema.signals.id, id));
   revalidatePath("/signals/archive");
 }
 
 export async function restoreSignalAction(id: number) {
+  await requireAdmin();
   await db.update(schema.signals).set({ status: "unused", archivedAt: null }).where(eq(schema.signals.id, id));
   revalidatePath("/signals");
   revalidatePath("/signals/archive");
@@ -281,6 +305,7 @@ export async function getAuthorContentAnglesAction(authorId: number) {
 }
 
 export async function createContentAngleAction(name: string): Promise<typeof schema.contentAngles.$inferSelect> {
+  await requireAdmin();
   const trimmed = name.trim();
   if (!trimmed) throw new Error("Angle name is required.");
   const existing = await db.select().from(schema.contentAngles).where(eq(schema.contentAngles.name, trimmed)).limit(1);
@@ -291,12 +316,14 @@ export async function createContentAngleAction(name: string): Promise<typeof sch
 }
 
 export async function deleteContentAngleAction(id: number) {
+  await requireAdmin();
   await db.delete(schema.contentAngles).where(eq(schema.contentAngles.id, id));
   revalidatePath("/authors/content-angles");
   revalidatePath("/authors");
 }
 
 export async function addContentAngleToAuthorAction(authorId: number, contentAngleId: number) {
+  await requireAdmin();
   await db.insert(schema.authorContentAngles).values({ authorId, contentAngleId }).onConflictDoNothing();
 
   const [author] = await db.select().from(schema.authors).where(eq(schema.authors.id, authorId));
@@ -311,6 +338,7 @@ export async function addContentAngleToAuthorAction(authorId: number, contentAng
 }
 
 export async function removeContentAngleFromAuthorAction(authorId: number, contentAngleId: number) {
+  await requireAdmin();
   await db
     .delete(schema.authorContentAngles)
     .where(and(eq(schema.authorContentAngles.authorId, authorId), eq(schema.authorContentAngles.contentAngleId, contentAngleId)));
@@ -336,6 +364,7 @@ export async function createAuthorAction(input: {
   styleNotes?: string;
   email?: string;
 }) {
+  await requireAdmin();
   const email = input.email?.toLowerCase().trim() || null;
   const [row] = await db
     .insert(schema.authors)
@@ -360,12 +389,14 @@ export async function updateAuthorAction(id: number, patch: Partial<{
   styleNotes: string;
   active: boolean;
 }>) {
+  await requireAdmin();
   await db.update(schema.authors).set(patch).where(eq(schema.authors.id, id));
   revalidatePath("/authors");
   revalidatePath(`/authors/${id}`);
 }
 
 export async function updateAuthorContentAnglesAction(authorId: number, angles: string[]) {
+  await requireAdmin();
   const filtered = angles.map((a) => a.trim()).filter(Boolean);
   if (filtered.length === 0) throw new Error("At least one content angle is required.");
 
@@ -400,6 +431,7 @@ export async function createFrameworkAction(input: {
   promptTemplate: string;
   bestFor?: string[];
 }) {
+  await requireAdmin();
   const [row] = await db
     .insert(schema.frameworks)
     .values({
@@ -419,11 +451,13 @@ export async function updateFrameworkAction(id: number, patch: {
   promptTemplate?: string;
   bestFor?: string[];
 }) {
+  await requireAdmin();
   await db.update(schema.frameworks).set(patch).where(eq(schema.frameworks.id, id));
   revalidatePath("/frameworks");
 }
 
 export async function deleteFrameworkAction(id: number) {
+  await requireAdmin();
   await db.delete(schema.frameworks).where(eq(schema.frameworks.id, id));
   revalidatePath("/frameworks");
 }
@@ -459,6 +493,7 @@ export async function addUserAction(email: string, role: "admin" | "user") {
 }
 
 export async function removeUserAction(id: number) {
+  await requireAdmin();
   await db.delete(schema.users).where(eq(schema.users.id, id));
   revalidatePath("/authors");
 }
@@ -471,6 +506,7 @@ export async function generatePostAction(input: {
   frameworkId: number;
   contentAngle: string;
 }) {
+  await requireAuth();
   const [signal] = await db.select().from(schema.signals).where(eq(schema.signals.id, input.signalId));
   const [author] = await db.select().from(schema.authors).where(eq(schema.authors.id, input.authorId));
   const [framework] = await db.select().from(schema.frameworks).where(eq(schema.frameworks.id, input.frameworkId));
@@ -545,6 +581,7 @@ export async function generatePostAction(input: {
 }
 
 export async function updatePostContentAction(postId: number, newContent: string, instruction?: string) {
+  await requireAuth();
   const [current] = await db.select().from(schema.posts).where(eq(schema.posts.id, postId));
   if (!current) throw new Error("Post not found.");
   if (current.content === newContent) return current;
@@ -601,6 +638,7 @@ export async function updatePostContentAction(postId: number, newContent: string
 }
 
 export async function assistedEditAction(postId: number, instruction: string) {
+  await requireAuth();
   const [current] = await db.select().from(schema.posts).where(eq(schema.posts.id, postId));
   if (!current) throw new Error("Post not found.");
   const [author] = current.authorId
@@ -611,12 +649,14 @@ export async function assistedEditAction(postId: number, instruction: string) {
 }
 
 export async function submitForReviewAction(postId: number) {
+  await requireAuth();
   await db.update(schema.posts).set({ status: "in_review", updatedAt: new Date() }).where(eq(schema.posts.id, postId));
   revalidatePath("/drafts");
   revalidatePath(`/posts/${postId}`);
 }
 
 export async function approvePostAction(postId: number, notes?: string) {
+  await requireAdmin();
   await db
     .update(schema.posts)
     .set({ status: "approved", reviewerNotes: notes ?? null, updatedAt: new Date() })
@@ -625,7 +665,18 @@ export async function approvePostAction(postId: number, notes?: string) {
   revalidatePath(`/posts/${postId}`);
 }
 
+export async function reopenPostAction(postId: number) {
+  await requireAuth();
+  await db
+    .update(schema.posts)
+    .set({ status: "draft", reviewerNotes: null, updatedAt: new Date() })
+    .where(eq(schema.posts.id, postId));
+  revalidatePath("/drafts");
+  revalidatePath(`/posts/${postId}`);
+}
+
 export async function rejectPostAction(postId: number, notes: string) {
+  await requireAdmin();
   await db
     .update(schema.posts)
     .set({ status: "rejected", reviewerNotes: notes, updatedAt: new Date() })
@@ -635,6 +686,7 @@ export async function rejectPostAction(postId: number, notes: string) {
 }
 
 export async function markPublishedAction(postId: number, linkedinUrl?: string) {
+  await requireAdmin();
   const urn = linkedinUrl ? extractLinkedinPostUrn(linkedinUrl) : null;
   await db
     .update(schema.posts)
@@ -655,6 +707,7 @@ export async function markPublishedAction(postId: number, linkedinUrl?: string) 
 }
 
 export async function setLinkedinPostUrlAction(postId: number, linkedinUrl: string) {
+  await requireAuth();
   const urn = extractLinkedinPostUrn(linkedinUrl);
   if (!urn) throw new Error("Could not extract a LinkedIn post URN from that URL. Make sure it's a valid post link.");
   await db
@@ -668,6 +721,7 @@ export async function setLinkedinPostUrlAction(postId: number, linkedinUrl: stri
 /* ========== DESIGN BRIEF ========== */
 
 export async function generateDesignBriefAction(postId: number) {
+  await requireAdmin();
   const existing = await db
     .select()
     .from(schema.designBriefs)
@@ -706,6 +760,7 @@ export async function recordAnalyticsAction(postId: number, metrics: {
   shares?: number;
   clicks?: number;
 }) {
+  await requireAdmin();
   const [row] = await db
     .insert(schema.analytics)
     .values({
@@ -816,6 +871,7 @@ async function applyAnalysis(
 }
 
 export async function scrapeLinkedinProfileAction(authorId: number): Promise<{ ok: boolean; message: string }> {
+  await requireAdmin();
   try {
     let [author] = await db.select().from(schema.authors).where(eq(schema.authors.id, authorId));
     if (!author) return { ok: false, message: "Author not found." };
