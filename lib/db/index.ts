@@ -1,24 +1,18 @@
-import { Pool, neonConfig } from "@neondatabase/serverless";
-import { drizzle } from "drizzle-orm/neon-serverless";
-import ws from "ws";
+import { neon } from "@neondatabase/serverless";
+import { drizzle } from "drizzle-orm/neon-http";
 import * as schema from "./schema";
-
-neonConfig.webSocketConstructor = ws;
 
 declare global {
   // eslint-disable-next-line no-var
-  var __pool: Pool | undefined;
+  var __sqlClient: ReturnType<typeof neon> | undefined;
 }
 
 if (!process.env.DATABASE_URL) {
   console.warn("[db] DATABASE_URL is not set");
 }
 
-const pool =
-  global.__pool ??
-  new Pool({ connectionString: process.env.DATABASE_URL ?? "postgres://placeholder" });
+const sql = global.__sqlClient ?? neon(process.env.DATABASE_URL ?? "postgres://placeholder");
+if (process.env.NODE_ENV !== "production") global.__sqlClient = sql;
 
-if (process.env.NODE_ENV !== "production") global.__pool = pool;
-
-export const db = drizzle(pool, { schema });
+export const db = drizzle(sql, { schema });
 export { schema };
