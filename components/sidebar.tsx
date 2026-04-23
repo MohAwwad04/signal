@@ -73,7 +73,7 @@ export function Sidebar() {
       dark:bg-[hsl(215,52%,9%)] dark:border-[hsl(215,40%,16%)]">
 
       {/* Logo header */}
-      <div className="flex items-center gap-3 px-5 h-16 border-b border-gray-200 dark:border-[hsl(215,40%,16%)] shrink-0">
+      <Link href="/" className="flex items-center gap-3 px-5 h-16 border-b border-gray-200 dark:border-[hsl(215,40%,16%)] shrink-0 hover:opacity-80 transition-opacity">
         <div className="relative flex-shrink-0">
           <Image src="/logo.png" alt="Signal logo" width={38} height={38} className="rounded-xl" />
         </div>
@@ -83,7 +83,7 @@ export function Sidebar() {
             content automation
           </span>
         </div>
-      </div>
+      </Link>
 
       {/* Navigation */}
       <nav className="flex flex-1 flex-col gap-1 p-3 pt-4">
