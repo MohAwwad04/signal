@@ -526,6 +526,7 @@ export async function generatePostAction(input: {
   const postInput = {
     signalRawContent: signal.rawContent,
     contentAngle: input.contentAngle,
+    suggestedHashtags: (signal.hashtags as string[] | null)?.filter(Boolean) ?? undefined,
     author: {
       name: author.name,
       role: author.role,

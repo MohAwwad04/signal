@@ -228,6 +228,7 @@ Return only the reformatted post — no explanations, no labels.`,
 export type GeneratePostInput = {
   signalRawContent: string;
   contentAngle: string;
+  suggestedHashtags?: string[];
   author: {
     name: string;
     role: string | null;
@@ -325,7 +326,7 @@ This is your ONLY source of truth. Do NOT fabricate any claims, numbers, or even
 """
 ${input.signalRawContent}
 """
-
+${input.suggestedHashtags?.length ? `\n━━━ HASHTAG SUGGESTIONS ━━━\nInclude these in the hashtag line at the end (add or replace only if a better fit exists): ${input.suggestedHashtags.map(h => `#${h}`).join(" ")}` : ""}
 Write ONE complete LinkedIn post. Return ONLY the post text — no explanations, no labels, no preamble.`,
   });
 }
