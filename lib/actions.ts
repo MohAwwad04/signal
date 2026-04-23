@@ -652,6 +652,7 @@ export async function assistedEditAction(postId: number, instruction: string) {
 export async function submitForReviewAction(postId: number) {
   await requireAuth();
   await db.update(schema.posts).set({ status: "in_review", updatedAt: new Date() }).where(eq(schema.posts.id, postId));
+  revalidatePath("/");
   revalidatePath("/drafts");
   revalidatePath(`/posts/${postId}`);
 }

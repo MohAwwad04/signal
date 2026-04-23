@@ -89,7 +89,7 @@ export default async function DashboardPage() {
           {/* Stats grid */}
           <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
             <Stat icon={<Radio    className="h-4 w-4" />} label="Unused signals" value={stats.unused}    href="/signals"   color="blue" />
-            <Stat icon={<FileEdit className="h-4 w-4" />} label="In review"      value={stats.drafts}    href="/drafts"    color="purple" />
+            <Stat icon={<FileEdit className="h-4 w-4" />} label="In review"      value={stats.inReview}  href="/drafts"    color="purple" />
             <Stat icon={<Send     className="h-4 w-4" />} label="Published"      value={stats.published} href="/analytics" color="emerald" />
             <Stat icon={<Users    className="h-4 w-4" />} label="Authors"        value={stats.authors}   href="/authors"   color="cyan" />
           </div>
