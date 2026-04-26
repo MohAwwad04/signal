@@ -15,6 +15,7 @@ import { LinkedinUrlEditor } from "./linkedin-url-editor";
 import { ArrowUpRight, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
+import { PerformanceLearningCard } from "./performance-learning-card";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -113,7 +114,7 @@ export default async function AuthorDetailPage({ params }: { params: { id: strin
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 md:grid-cols-2 mb-10">
+      <div className="grid gap-4 md:grid-cols-2 mb-6">
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Voice profile</CardTitle>
@@ -141,6 +142,16 @@ export default async function AuthorDetailPage({ params }: { params: { id: strin
           </CardContent>
         </Card>
       </div>
+
+      {session?.isAdmin && (
+        <div className="mb-10">
+          <PerformanceLearningCard
+            authorId={author.id}
+            hints={author.performanceLearningHints ?? null}
+            updatedAt={author.performanceLearningUpdatedAt ?? null}
+          />
+        </div>
+      )}
 
       <div className="mb-4 flex items-center justify-between">
         <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Posts ({posts.length})</h2>

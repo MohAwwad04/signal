@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "additionalDirectories": [
+      "D:\\.claude\\projects\\d--signal\\memory"
+    ],
+    "allow": [
+      "Bash(npx tsc *)"
+    ]
+  }
+}

@@ -106,6 +106,8 @@ export const authors = pgTable("authors", {
   googleUserEmail: varchar("google_user_email", { length: 256 }),
   googleConnectedAt: timestamp("google_connected_at"),
   googleLastSyncedAt: timestamp("google_last_synced_at"),
+  performanceLearningHints: text("performance_learning_hints"),
+  performanceLearningUpdatedAt: timestamp("performance_learning_updated_at"),
 });
 
 /** Global pool of named content angles, independent of any author. */
