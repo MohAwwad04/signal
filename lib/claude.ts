@@ -243,6 +243,13 @@ For each qualified moment:
    - END with the transferable lesson as a plain declarative sentence any professional can apply
    - It must read like a strong LinkedIn post draft, not a note-to-self or internal summary
 
+   ACCURACY GATE — before writing anything, verify against the transcript:
+   - Every number, claim, outcome, and named result must be explicitly stated in the transcript — do not infer, round up, or sharpen a vague figure into a precise one
+   - If the transcript says "a lot" or "significant", do not write a specific number — keep the qualifier or drop the claim
+   - Do not add context, examples, or details that did not appear in the transcript
+   - If a claim is garbled or ambiguous, use the closest accurate reading and soften the language ("roughly", "around") — never invent clarity
+   - A signal that would give a reader a false impression of what actually happened → REJECT
+
    QUALITY GATE — reject the signal if:
    - It makes no sense without knowing who these people are or what the meeting was about
    - It contains only a vague observation with no specific proof
