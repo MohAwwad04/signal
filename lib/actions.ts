@@ -42,6 +42,7 @@ export async function extractSignalsAction( // transcription vaildation + fetch 
     performanceLearningHints: a.performanceLearningHints ?? undefined,
   }));
   const generated = await generatePostsFromTranscript(transcript, authorContexts, allFrameworks);
+  console.log(`[extract] Claude returned ${generated.length} signal(s)`);
   if (!generated.length) return { inserted: 0, signals: [] };
   const [transcriptRow, visibleAuthorIds] = await Promise.all([
     ensureTranscript({
@@ -78,9 +79,11 @@ export async function extractSignalsAction( // transcription vaildation + fetch 
     };
   });
   const deduped = await deduplicateAgainstExisting(rows);
+  console.log(`[extract] After dedup: ${deduped.length}/${rows.length} signal(s) remain`);
   if (!deduped.length) return { inserted: 0, signals: [] };
   const inserted = await db.insert(schema.signals).values(deduped).returning();
   const kept = await scoreSignalsOrDelete(inserted.map((r) => r.id));
+  console.log(`[extract] After scoring: ${kept.length}/${inserted.length} signal(s) kept`);
   revalidatePath("/signals");
   revalidatePath("/");
   return { inserted: kept.length, signals: inserted.filter((s) => kept.includes(s.id)) };

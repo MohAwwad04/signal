@@ -137,9 +137,13 @@ function deduplicateAndRank(signals: GeneratedSignal[]): GeneratedSignal[] {
 }
 
 function parseSignals(raw: string): GeneratedSignal[] {
-  if (!/\bPOST \d+:/i.test(raw)) return [];
+  if (!/\bPOST \d+:/i.test(raw)) {
+    console.log("[parseSignals] No POST markers found. Raw response (first 300 chars):", raw.slice(0, 300));
+    return [];
+  }
   // slice(1) drops everything before the first POST marker (preamble / reasoning text)
   const parts = raw.split(/\bPOST \d+:/i).slice(1).filter((p) => p.trim().length > 80);
+  console.log(`[parseSignals] Split into ${parts.length} part(s) after POST markers`);
   return parts
     .map((part) => {
       const lines = part.trim().split("\n");
@@ -243,12 +247,12 @@ For each qualified moment:
    - END with the transferable lesson as a plain declarative sentence any professional can apply
    - It must read like a strong LinkedIn post draft, not a note-to-self or internal summary
 
-   ACCURACY GATE — before writing anything, verify against the transcript:
-   - Every number, claim, outcome, and named result must be explicitly stated in the transcript — do not infer, round up, or sharpen a vague figure into a precise one
-   - If the transcript says "a lot" or "significant", do not write a specific number — keep the qualifier or drop the claim
-   - Do not add context, examples, or details that did not appear in the transcript
-   - If a claim is garbled or ambiguous, use the closest accurate reading and soften the language ("roughly", "around") — never invent clarity
-   - A signal that would give a reader a false impression of what actually happened → REJECT
+   ACCURACY — stay faithful to the transcript:
+   - Only use numbers, claims, and outcomes that are explicitly in the transcript — do not invent or sharpen vague figures
+   - If the transcript says "a lot" or "significant", mirror that qualifier — do not convert it to a specific number
+   - If a detail is ambiguous, use softening language ("roughly", "around") rather than skipping the signal entirely
+   - Do not add context or examples that did not appear in the transcript
+   - Only reject on accuracy grounds if the signal would actively mislead — vagueness alone is not a reason to reject
 
    QUALITY GATE — reject the signal if:
    - It makes no sense without knowing who these people are or what the meeting was about
