@@ -107,18 +107,26 @@ export default async function SignalsPage({
   const authorMap = new Map(authors.map((a) => [a.id, a.name]));
   const isFiltered = !!(q || author || angle || from || to);
 
-  // Group signals by meeting (sourceMeetingTitle / sourceMeetingId). Null = manually created.
   type SignalRow = typeof signals[number];
   type Group = {
-    key: string | null;
+    key: string;
     title: string | null;
     date: Date | null;
     signals: SignalRow[];
   };
 
-  const groupMap = new Map<string | null, Group>();
+  const groupMap = new Map<string, Group>();
   for (const s of signals) {
-    const key = s.sourceMeetingId ?? s.sourceMeetingTitle ?? null;
+    // Each transcript extraction gets its own group via transcriptId.
+    // Fall back to meetingId / meetingTitle for legacy signals, then a per-signal key.
+    const key = s.transcriptId
+      ? `transcript:${s.transcriptId}`
+      : s.sourceMeetingId
+      ? `meeting:${s.sourceMeetingId}`
+      : s.sourceMeetingTitle
+      ? `title:${s.sourceMeetingTitle}`
+      : `signal:${s.id}`;
+
     if (!groupMap.has(key)) {
       groupMap.set(key, {
         key,
@@ -133,6 +141,18 @@ export default async function SignalsPage({
   const groups = [...groupMap.values()].sort((a, b) =>
     (b.date?.getTime() ?? 0) - (a.date?.getTime() ?? 0)
   );
+
+  // Number untitled transcript groups so same-day ones are distinguishable.
+  const untitledByDay = new Map<string, number>();
+  const groupNumbers = new Map<string, number>();
+  for (const g of groups) {
+    if (!g.title) {
+      const day = (g.date ?? new Date()).toDateString();
+      const n = (untitledByDay.get(day) ?? 0) + 1;
+      untitledByDay.set(day, n);
+      groupNumbers.set(g.key, n);
+    }
+  }
 
   return (
     <div className="mx-auto w-full max-w-6xl p-6 md:p-10">
@@ -198,7 +218,7 @@ export default async function SignalsPage({
                 <div className="flex items-center gap-2 min-w-0">
                   <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60" />
                   <span className="text-sm font-semibold truncate">
-                    {group.title ?? `Transcript · ${(group.date ?? new Date()).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}`}
+                    {group.title ?? `Transcript · ${(group.date ?? new Date()).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}${(groupNumbers.get(group.key) ?? 0) > 1 || (untitledByDay.get((group.date ?? new Date()).toDateString()) ?? 0) > 1 ? ` · #${groupNumbers.get(group.key)}` : ""}`}
                   </span>
                   <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
                     {group.signals.length} signal{group.signals.length !== 1 ? "s" : ""}
