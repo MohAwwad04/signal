@@ -18,6 +18,7 @@ import {
   analyzeLinkedinPageContent,
 } from "@/lib/claude";
 import { ensureTranscript, scoreSignalsOrDelete } from "@/lib/signals-helpers";
+import { getVisibleAuthorIds } from "@/lib/session";
 
 /* ========== SIGNALS ========== */
 
@@ -39,15 +40,21 @@ export async function extractSignalsAction( // transcription vaildation + fetch 
   }));
   const generated = await generatePostsFromTranscript(transcript, authorContexts);
   if (!generated.length) return { inserted: 0, signals: [] };
-  const transcriptRow = await ensureTranscript({
-    title: meetingTitle ?? null,
-    content: transcript,
-    source: "manual",
-    sourceMeetingDate: meetingDate ? new Date(meetingDate) : null,
-  });
+  const [transcriptRow, visibleAuthorIds] = await Promise.all([
+    ensureTranscript({
+      title: meetingTitle ?? null,
+      content: transcript,
+      source: "manual",
+      sourceMeetingDate: meetingDate ? new Date(meetingDate) : null,
+    }),
+    getVisibleAuthorIds(),
+  ]);
   const rows = generated.map((s) => {
     const recAuthor = s.recommendedAuthorRole
-      ? authors.find((a) => a.role?.toLowerCase() === s.recommendedAuthorRole?.toLowerCase())
+      ? authors.find((a) =>
+          a.role?.toLowerCase() === s.recommendedAuthorRole?.toLowerCase() &&
+          (visibleAuthorIds === null || visibleAuthorIds.includes(a.id))
+        )
       : undefined;
     return {
       rawContent: s.rawContent,
