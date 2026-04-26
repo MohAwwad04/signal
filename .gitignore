@@ -1,4 +1,5 @@
 *.log
+CREDENTIALS.txt
 .DS_Store
 .env
 .env.local

@@ -239,11 +239,11 @@ For each qualified moment:
    - Never reference "the meeting", "our call", "we discussed", "this quarter", "our team", or any internal context
    - Every specific detail (number, outcome, name, result) must be explained inline so any reader can follow
    - Replace "we" with "I" or make it universal — it must sound like a public post, not a meeting note
-   - If the insight cannot be made self-contained without losing its meaning → REJECT it
+   - If the insight leans heavily on internal context, generalise it — do not reject it for this reason alone
 
    STRUCTURE:
    - OPEN with the most surprising or specific detail — stated as a universal truth or personal experience, never as "in our meeting we found…"
-   - INCLUDE at least one concrete anchor: a real number, a before/after result, or a named outcome — explained plainly
+   - AIM for at least one concrete anchor: a real number, a before/after result, or a named outcome — if the transcript has none, a clear specific example or quoted decision is acceptable
    - END with the transferable lesson as a plain declarative sentence any professional can apply
    - It must read like a strong LinkedIn post draft, not a note-to-self or internal summary
 
@@ -254,11 +254,10 @@ For each qualified moment:
    - Do not add context or examples that did not appear in the transcript
    - Only reject on accuracy grounds if the signal would actively mislead — vagueness alone is not a reason to reject
 
-   QUALITY GATE — reject the signal if:
-   - It makes no sense without knowing who these people are or what the meeting was about
-   - It contains only a vague observation with no specific proof
-   - It is a meeting update, not an insight ("We decided to launch in Q3" → reject)
-   - A reader would ask "so what?" after reading it
+   QUALITY GATE — reject the signal only if:
+   - It makes no sense without knowing who these people are or what the meeting was about (even after generalising)
+   - It is purely a status update or logistics note with zero transferable lesson ("We decided to launch in Q3" → reject)
+   - A reader would ask "so what?" AND there is no way to anchor it to anything specific from the transcript
 
 AUTHORS AND THEIR CONTENT ANGLES:
 ${authorBlock || `Any role from: ${fallbackRoles.join(", ")}`}

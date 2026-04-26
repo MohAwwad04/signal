@@ -39,6 +39,11 @@ app/
     google/        oauth callback
     invite/        validate token, complete registration
   signals/         Signal listing + filtering (grouped by meeting)
+    signals-list.tsx  Client component — bulk-select + archive UI
+    filter-bar.tsx
+    group-title-edit.tsx
+    send-signal-button.tsx
+  signals/[id]/    Signal detail + post editor
   posts/[id]/      Post editor (approve, reject, refine, design brief)
   drafts/          User's own posts awaiting review
   authors/         Author management
@@ -51,11 +56,12 @@ app/
   layout.tsx       Root layout
 
 lib/
-  claude.ts        ALL Claude prompts (~2600 lines) — every AI call lives here
-  actions.ts       ALL server actions (~2000 lines) — every mutation lives here
+  claude.ts        ALL Claude prompts — every AI call lives here
+  actions.ts       ALL server actions — every mutation lives here
   db/
     schema.ts      13 Drizzle table definitions
     index.ts       Drizzle + Neon client instance
+  signals-helpers.ts  ensureTranscript, scoreSignalsOrDelete, deduplicateAgainstExisting
   session.ts       getCurrentUser() — cached, role-aware
   auth.ts          Superadmin email constant, token hashing
   fathom.ts        Fathom API (token refresh, meetings, transcripts)
@@ -151,6 +157,9 @@ Every function calls the Anthropic SDK directly. All prompts live here — never
 - Forbidden phrases: 100+ AI-sounding phrases explicitly blocked in generation prompts
 - Supports Arabic/English mixed transcripts with contextual homophone handling
 - Scoring is intentionally skeptical — most posts score 20–50, reserves 70+ for exceptional
+- `parseSignals()` guards: if raw response has no `POST \d+:` markers, returns `[]` immediately (prevents assessment text being saved as a signal); uses `.slice(1)` after split to drop preamble before first POST marker
+- Signal extraction prompt has an ACCURACY gate: Claude must only report information actually present in the transcript, use qualifiers for implied info, and generalise rather than reject when details are sparse
+- Phase 2 SELF-CONTAINMENT is soft ("generalise rather than reject"); STRUCTURE anchor is preferred but not required for transcripts with no numbers
 
 ### `lib/actions.ts` — All Business Logic
 
@@ -163,9 +172,11 @@ Key patterns:
 - Try-catch with `.catch(() => [])` for read queries
 
 **Signal workflow:**
-- `extractSignalsAction(transcript, meetingTitle?, meetingDate?)` — calls Claude, stores transcript, inserts signals, auto-scores each
-- `createManualSignalAction(data)` — user manually adds signal
-- `scoreSignalAction(id)` — re-score existing signal
+- `extractSignalsAction(transcript, meetingTitle?, meetingDate?)` — calls Claude, stores transcript, inserts signals, auto-scores each; returns `{ inserted, reason }` — `reason` is populated when `inserted === 0`
+- `createManualSignalAction(data)` — user manually adds signal; runs `deduplicateAgainstExisting` and throws if a near-duplicate exists (Jaccard ≥ 0.75)
+- `scoreSignalAction(id)` — re-score existing signal and persist to DB
+- `scoreContentAction(content)` — score arbitrary content string (no DB read/write); used for live preview scoring in the signal editor
+- `bulkArchiveSignalsAction(ids: number[])` — archive multiple signals in one query + revalidate
 - `archiveSignalAction(id)` / `deleteSignalPermanentlyAction(id)`
 
 **Post workflow:**
@@ -181,6 +192,23 @@ Key patterns:
 **Learning actions:**
 - `learnFromPerformanceAction(authorId)` — re-analyze top 3–5 posts, update performance hints
 - Voice learning fires automatically on `approvePostAction`
+
+### `lib/signals-helpers.ts` — Signal Utilities
+
+| Export | What it does |
+|--------|-------------|
+| `ensureTranscript(text, source, metadata?)` | Upsert transcript row; returns id |
+| `scoreSignalsOrDelete(signalIds)` | Score each signal; delete if scoring throws |
+| `deduplicateAgainstExisting(rows)` | Fetch up to 2000 non-archived signals; filter candidates with Jaccard ≥ 0.75 against any existing signal; returns safe-to-insert subset |
+
+**Deduplication policy:**
+- `deduplicateAgainstExisting` runs on **cron/sync paths only** (fathom-sync, google-sync, fathom webhook, per-author sync routes)
+- It does **NOT** run on `extractSignalsAction` (user-initiated manual extraction) — would block legitimate re-extractions
+- `createManualSignalAction` runs it and throws on match to prevent accidental manual duplicates
+
+**Signal detail live rescoring:**
+- Framework apply → `scoreContentAction(reformatted)` immediately updates score UI (no save)
+- Signal save → `scoreContentAction(draft)` updates UI, then `scoreSignalAction(id)` persists to DB
 
 ---
 
