@@ -246,8 +246,9 @@ export default async function SignalsPage({
                   const taggedAngles = (s.contentAngles as string[] | null) ?? [];
                   const hashtags = ((s as any).hashtags as string[] | null) ?? [];
                   const signalTitle = (s as any).title as string | null;
-                  const previewTags = hashtags.slice(0, 4);
-                  const previewTitle = !previewTags.length && signalTitle
+                  const previewHashtags = hashtags.slice(0, 4);
+                  const previewAngles = !previewHashtags.length ? taggedAngles.slice(0, 4) : [];
+                  const previewTitle = !previewHashtags.length && !previewAngles.length && signalTitle
                     ? signalTitle.trim().split(/\s+/).slice(0, 5).join(" ")
                     : null;
                   return (
@@ -272,12 +273,22 @@ export default async function SignalsPage({
                               {tag}
                             </span>
                           ))}
-                          {previewTags.length > 0 && (
+                          {previewHashtags.length > 0 && (
                             <>
                               <span className="text-muted-foreground/40">·</span>
-                              {previewTags.map((tag) => (
+                              {previewHashtags.map((tag) => (
                                 <span key={tag} className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground/70">
                                   #{tag}
+                                </span>
+                              ))}
+                            </>
+                          )}
+                          {previewAngles.length > 0 && (
+                            <>
+                              <span className="text-muted-foreground/40">·</span>
+                              {previewAngles.map((tag) => (
+                                <span key={tag} className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground/70">
+                                  {tag}
                                 </span>
                               ))}
                             </>
