@@ -1,5 +1,5 @@
 import { db, schema } from "./db";
-import { eq, inArray, and, isNull, or, sql } from "drizzle-orm";
+import { eq, inArray, and, isNull, or, sql, ne } from "drizzle-orm";
 import { scorePost } from "./claude";
 
 function jaccardSimilarity(a: string, b: string): number {
@@ -13,8 +13,9 @@ function jaccardSimilarity(a: string, b: string): number {
 }
 
 /**
- * Filters out any candidate rows whose rawContent is too similar (Jaccard ≥ 0.45)
- * to a signal already in the database. Fetches up to 2000 existing signals to compare.
+ * Filters out candidate rows whose rawContent is near-identical (Jaccard ≥ 0.75)
+ * to a non-archived signal already in the database.
+ * Only active signals are compared — archived ones are excluded.
  */
 export async function deduplicateAgainstExisting<T extends { rawContent: string }>(
   rows: T[],
@@ -23,10 +24,11 @@ export async function deduplicateAgainstExisting<T extends { rawContent: string 
   const existing = await db
     .select({ rawContent: schema.signals.rawContent })
     .from(schema.signals)
+    .where(ne(schema.signals.status, "archived"))
     .limit(2000);
   if (!existing.length) return rows;
   return rows.filter(
-    (row) => !existing.some((e) => jaccardSimilarity(row.rawContent, e.rawContent) >= 0.45),
+    (row) => !existing.some((e) => jaccardSimilarity(row.rawContent, e.rawContent) >= 0.75),
   );
 }
 
