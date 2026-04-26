@@ -238,8 +238,8 @@ export default async function SignalsPage({
                   const authorName = s.recommendedAuthorId ? authorMap.get(s.recommendedAuthorId) : null;
                   const contentLines = s.rawContent.split("\n").filter((l) => l.trim().length > 0);
                   const firstLine = contentLines[0] ?? s.rawContent;
-                  const previewRaw = contentLines.slice(1).find((l) => l.trim().length > 20) ?? "";
-                  const preview = previewRaw.length > 95 ? previewRaw.slice(0, 95) + "…" : previewRaw;
+                  const restText = (contentLines.slice(1).join(" ").trim() || s.rawContent.slice(firstLine.length).trim()).replace(/\s+/g, " ");
+                  const preview = restText.length > 95 ? restText.slice(0, 95).trimEnd() + "…" : restText;
                   const taggedAngles = (s.contentAngles as string[] | null) ?? [];
                   return (
                     <div
