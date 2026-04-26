@@ -2,16 +2,20 @@
 
 import { db, schema } from "@/lib/db";
 import { revalidatePath } from "next/cache";
-import { desc, eq, and, sql, lt } from "drizzle-orm";
+import { desc, eq, and, sql, lt, inArray } from "drizzle-orm";
 import { extractLinkedinPostUrn } from "@/lib/linkedin";
+import { sendInviteEmail } from "@/lib/email";
+import { randomBytes } from "crypto";
 import {
   generatePostsFromTranscript,
   generatePost,
   assistedEdit,
   scorePost,
   learnVoiceFromEdits,
+  learnFromPerformance,
   generateDesignBrief,
   reformatPostWithFramework,
+  analyzeLinkedinPageContent,
 } from "@/lib/claude";
 
 /* ========== SIGNALS ========== */
@@ -25,12 +29,14 @@ export async function extractSignalsAction( // transcription vaildation + fetch 
     throw new Error("Transcript is too short — paste more context.");
   }
   const authors = await db.select().from(schema.authors).where(eq(schema.authors.active, true));
-  const roles = authors.map((a) => a.role ?? "").filter(Boolean);
-  const allAngles = authors.flatMap((a) => (a.contentAngles as string[] | null) ?? []);
-  const voiceProfiles = Object.fromEntries(
-    authors.filter((a) => a.role && a.voiceProfile).map((a) => [a.role!, a.voiceProfile!])
-  );
-  const generated = await generatePostsFromTranscript(transcript, roles, allAngles, voiceProfiles);
+  const authorContexts = authors.map((a) => ({
+    role: a.role ?? "",
+    contentAngles: (a.contentAngles as string[] | null) ?? [],
+    preferredFrameworkNames: [] as string[],
+    voiceProfile: a.voiceProfile ?? undefined,
+    performanceLearningHints: a.performanceLearningHints ?? undefined,
+  }));
+  const generated = await generatePostsFromTranscript(transcript, authorContexts);
   if (!generated.length) return { inserted: 0, signals: [] };
   const rows = generated.map((s) => {
     const recAuthor = s.recommendedAuthorRole
@@ -447,6 +453,212 @@ export async function recordAnalyticsAction(postId: number, metrics: {
   revalidatePath("/analytics");
   revalidatePath(`/posts/${postId}`);
   return row;
+}
+
+/* ========== DASHBOARD ========== */
+
+/* ========== SIGNAL EXTRAS ========== */
+
+export async function createManualSignalAction(input: { title?: string; content: string; hashtags?: string[] }) {
+  const [row] = await db
+    .insert(schema.signals)
+    .values({
+      rawContent: input.content,
+      contentType: "post",
+      speaker: null,
+    })
+    .returning();
+  revalidatePath("/signals");
+  return row;
+}
+
+export async function scoreSignalAction(signalId: number) {
+  const [signal] = await db.select().from(schema.signals).where(eq(schema.signals.id, signalId));
+  if (!signal) throw new Error("Signal not found.");
+  const scores = await scorePost(signal.rawContent);
+  await db.update(schema.signals).set({
+    hookStrengthScore: scores.hookStrength,
+    specificityScore: scores.specificity,
+    clarityScore: scores.clarity,
+    emotionalResonanceScore: scores.emotionalResonance,
+    callToActionScore: scores.callToAction,
+  }).where(eq(schema.signals.id, signalId));
+  revalidatePath(`/signals/${signalId}`);
+  return scores;
+}
+
+export async function updateSignalAuthorAction(signalId: number, authorId: number | null) {
+  await db.update(schema.signals).set({ recommendedAuthorId: authorId }).where(eq(schema.signals.id, signalId));
+  revalidatePath(`/signals/${signalId}`);
+}
+
+export async function updateSignalBestFrameworkAction(signalId: number, frameworkId: number | null) {
+  await db.update(schema.signals).set({ bestFrameworkId: frameworkId }).where(eq(schema.signals.id, signalId));
+  revalidatePath(`/signals/${signalId}`);
+}
+
+export async function updateSignalContentAnglesAction(signalId: number, angles: string[]) {
+  await db.update(schema.signals).set({ contentAngles: angles } as any).where(eq(schema.signals.id, signalId));
+  revalidatePath(`/signals/${signalId}`);
+}
+
+export async function submitSignalDraftsForReviewAction(signalId: number) {
+  await db
+    .update(schema.posts)
+    .set({ status: "in_review" })
+    .where(and(eq(schema.posts.signalId, signalId), eq(schema.posts.status, "draft")));
+  revalidatePath(`/signals/${signalId}`);
+  revalidatePath("/signals");
+}
+
+/* ========== CONTENT ANGLES ========== */
+
+export async function createContentAngleAction(name: string) {
+  const trimmed = name.trim();
+  if (!trimmed) throw new Error("Name is required.");
+  const existing = await db.select().from(schema.contentAngles).where(eq(schema.contentAngles.name, trimmed));
+  if (existing.length > 0) return existing[0];
+  const [row] = await db.insert(schema.contentAngles).values({ name: trimmed }).returning();
+  revalidatePath("/authors");
+  return row;
+}
+
+export async function deleteContentAngleAction(id: number) {
+  await db.delete(schema.contentAngles).where(eq(schema.contentAngles.id, id));
+  revalidatePath("/authors");
+}
+
+export async function addContentAngleToAuthorAction(authorId: number, angleId: number) {
+  await db
+    .insert(schema.authorContentAngles)
+    .values({ authorId, contentAngleId: angleId })
+    .onConflictDoNothing();
+  revalidatePath(`/authors/${authorId}`);
+}
+
+export async function removeContentAngleFromAuthorAction(authorId: number, angleId: number) {
+  await db
+    .delete(schema.authorContentAngles)
+    .where(and(eq(schema.authorContentAngles.authorId, authorId), eq(schema.authorContentAngles.contentAngleId, angleId)));
+  revalidatePath(`/authors/${authorId}`);
+}
+
+/* ========== FRAMEWORK EXTRAS ========== */
+
+export async function updateFrameworkAction(id: number, patch: Partial<{ name: string; description: string; promptTemplate: string; bestFor: string[] }>) {
+  await db.update(schema.frameworks).set(patch).where(eq(schema.frameworks.id, id));
+  revalidatePath("/frameworks");
+}
+
+export async function deleteFrameworkAction(id: number) {
+  await db.delete(schema.frameworks).where(eq(schema.frameworks.id, id));
+  revalidatePath("/frameworks");
+}
+
+/* ========== POST EXTRAS ========== */
+
+export async function reopenPostAction(postId: number) {
+  await db.update(schema.posts).set({ status: "draft", reviewerNotes: null }).where(eq(schema.posts.id, postId));
+  revalidatePath(`/posts/${postId}`);
+}
+
+/* ========== PERFORMANCE LEARNING ========== */
+
+export async function learnFromPerformanceAction(authorId: number): Promise<{ updated: boolean; message: string }> {
+  const author = await db.select().from(schema.authors).where(eq(schema.authors.id, authorId)).then((r) => r[0]);
+  if (!author) throw new Error("Author not found.");
+
+  const topPosts = await db
+    .select()
+    .from(schema.posts)
+    .where(and(eq(schema.posts.authorId, authorId), eq(schema.posts.status, "published")))
+    .orderBy(desc(schema.posts.publishedAt))
+    .limit(10);
+
+  if (topPosts.length === 0) return { updated: false, message: "No published posts to learn from yet." };
+
+  const analyticsRows = await db
+    .select()
+    .from(schema.analytics)
+    .where(inArray(schema.analytics.postId, topPosts.map((p) => p.id)));
+
+  const analyticsMap = Object.fromEntries(analyticsRows.map((a) => [a.postId, a]));
+
+  const samples = topPosts
+    .map((p) => {
+      const a = analyticsMap[p.id];
+      const lines = p.content.split("\n");
+      return {
+        content: p.content,
+        hookLine: lines[0] ?? "",
+        contentAngle: p.contentAngle ?? null,
+        frameworkName: null as string | null,
+        impressions: a?.impressions ?? 0,
+        likes: a?.likes ?? 0,
+        comments: a?.comments ?? 0,
+      };
+    })
+    .sort((a, b) => (b.impressions + b.likes * 3 + b.comments * 5) - (a.impressions + a.likes * 3 + a.comments * 5))
+    .slice(0, 5);
+
+  const hints = await learnFromPerformance(author.name, samples, author.performanceLearningHints ?? null);
+  await db.update(schema.authors).set({
+    performanceLearningHints: hints,
+    performanceLearningUpdatedAt: new Date(),
+  }).where(eq(schema.authors.id, authorId));
+  revalidatePath(`/authors/${authorId}`);
+  return { updated: true, message: `Patterns updated from ${samples.length} published posts.` };
+}
+
+/* ========== LINKEDIN SCRAPE ========== */
+
+export async function scrapeLinkedinProfileAction(authorId: number): Promise<{ ok: boolean; message: string }> {
+  try {
+    const author = await db.select().from(schema.authors).where(eq(schema.authors.id, authorId)).then((r) => r[0]);
+    if (!author) return { ok: false, message: "Author not found." };
+    if (!author.linkedinUrl) return { ok: false, message: "No LinkedIn URL set for this author." };
+
+    const frameworks = await db.select({ name: schema.frameworks.name, description: schema.frameworks.description }).from(schema.frameworks);
+
+    const response = await fetch(author.linkedinUrl, { headers: { "User-Agent": "Mozilla/5.0" } });
+    const html = await response.text();
+    const text = html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").slice(0, 8000);
+
+    const result = await analyzeLinkedinPageContent(text, frameworks);
+
+    await db.update(schema.authors).set({
+      voiceProfile: result.voiceProfile,
+      styleNotes: result.styleNotes,
+      contentAngles: result.contentAngles,
+    } as any).where(eq(schema.authors.id, authorId));
+
+    revalidatePath(`/authors/${authorId}`);
+    return { ok: true, message: "LinkedIn profile analysed and voice updated." };
+  } catch {
+    return { ok: false, message: "Failed to read LinkedIn profile." };
+  }
+}
+
+/* ========== USER MANAGEMENT ========== */
+
+export async function addUserAction(email: string, role: string) {
+  const normalizedEmail = email.trim().toLowerCase();
+  const existing = await db.select().from(schema.users).where(eq(schema.users.email, normalizedEmail));
+  if (existing.length > 0) throw new Error("User already exists.");
+
+  await db.insert(schema.users).values({ email: normalizedEmail, role, active: false });
+
+  const token = randomBytes(32).toString("hex");
+  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+  await db.insert(schema.authTokens).values({ email: normalizedEmail, token, expiresAt });
+
+  await sendInviteEmail(normalizedEmail, token);
+  revalidatePath("/authors");
+}
+
+export async function removeUserAction(id: number) {
+  await db.delete(schema.users).where(eq(schema.users.id, id));
+  revalidatePath("/authors");
 }
 
 /* ========== DASHBOARD ========== */
