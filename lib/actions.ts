@@ -17,6 +17,7 @@ import {
   reformatPostWithFramework,
   analyzeLinkedinPageContent,
 } from "@/lib/claude";
+import { ensureTranscript, scoreSignalsOrDelete } from "@/lib/signals-helpers";
 
 /* ========== SIGNALS ========== */
 
@@ -38,6 +39,12 @@ export async function extractSignalsAction( // transcription vaildation + fetch 
   }));
   const generated = await generatePostsFromTranscript(transcript, authorContexts);
   if (!generated.length) return { inserted: 0, signals: [] };
+  const transcriptRow = await ensureTranscript({
+    title: meetingTitle ?? null,
+    content: transcript,
+    source: "manual",
+    sourceMeetingDate: meetingDate ? new Date(meetingDate) : null,
+  });
   const rows = generated.map((s) => {
     const recAuthor = s.recommendedAuthorRole
       ? authors.find((a) => a.role?.toLowerCase() === s.recommendedAuthorRole?.toLowerCase())
@@ -51,12 +58,14 @@ export async function extractSignalsAction( // transcription vaildation + fetch 
       source: "manual" as const,
       sourceMeetingTitle: meetingTitle ?? null,
       sourceMeetingDate: meetingDate ? new Date(meetingDate) : null,
+      transcriptId: transcriptRow.id,
     };
   });
   const inserted = await db.insert(schema.signals).values(rows).returning();
+  const kept = await scoreSignalsOrDelete(inserted.map((r) => r.id));
   revalidatePath("/signals");
   revalidatePath("/");
-  return { inserted: inserted.length, signals: inserted };
+  return { inserted: kept.length, signals: inserted.filter((s) => kept.includes(s.id)) };
 }
 
 export async function updateSignalContentAction(id: number, content: string) {
@@ -95,25 +104,6 @@ export async function updateSignalContentAction(id: number, content: string) {
 
   revalidatePath("/signals");
   revalidatePath(`/signals/${id}`);
-}
-
-export async function createSignalAction(input: { // create a signal manually (not from transcript)
-  rawContent: string;
-  contentType: string;
-  speaker?: string;
-  notes?: string;
-}) {
-  const [row] = await db
-    .insert(schema.signals)
-    .values({
-      rawContent: input.rawContent,
-      contentType: input.contentType,
-      speaker: input.speaker ?? null,
-      notes: input.notes ?? null,
-    })
-    .returning();
-  revalidatePath("/signals");
-  return row;
 }
 
 export async function applyFrameworkToSignalAction(content: string, frameworkId: number): Promise<string> {
@@ -460,14 +450,30 @@ export async function recordAnalyticsAction(postId: number, metrics: {
 /* ========== SIGNAL EXTRAS ========== */
 
 export async function createManualSignalAction(input: { title?: string; content: string; hashtags?: string[] }) {
+  if (!input.content || input.content.trim().length === 0) {
+    throw new Error("Signal content is required.");
+  }
+  const transcriptRow = await ensureTranscript({
+    title: input.title ?? null,
+    content: input.content,
+    source: "manual_entry",
+  });
   const [row] = await db
     .insert(schema.signals)
     .values({
       rawContent: input.content,
       contentType: "post",
       speaker: null,
+      title: input.title ?? null,
+      hashtags: input.hashtags ?? [],
+      source: "manual",
+      transcriptId: transcriptRow.id,
     })
     .returning();
+  const kept = await scoreSignalsOrDelete([row.id]);
+  if (kept.length === 0) {
+    throw new Error("Failed to score the signal — please try again.");
+  }
   revalidatePath("/signals");
   return row;
 }

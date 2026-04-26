@@ -3,6 +3,7 @@ import { db, schema } from "@/lib/db";
 import { isNotNull, eq, inArray, and } from "drizzle-orm";
 import { getValidFathomToken, fetchFathomMeetings } from "@/lib/fathom";
 import { generatePostsFromTranscript } from "@/lib/claude";
+import { ensureTranscript, scoreSignalsOrDelete } from "@/lib/signals-helpers";
 
 export const maxDuration = 300; // 5 min for Vercel Pro
 
@@ -56,6 +57,13 @@ export async function GET(req: NextRequest) {
         newMeetings.map(async (meeting) => {
           const generated = await generatePostsFromTranscript(meeting.transcript, authorContexts);
           if (!generated.length) return 0;
+          const transcriptRow = await ensureTranscript({
+            title: meeting.title,
+            content: meeting.transcript,
+            source: "fathom",
+            sourceMeetingId: meeting.id,
+            sourceMeetingDate: meeting.date ? new Date(meeting.date) : null,
+          });
           const rows = generated.map((s) => {
             const recAuthor = s.recommendedAuthorRole
               ? allAuthors.find((a) => a.role?.toLowerCase() === s.recommendedAuthorRole?.toLowerCase())
@@ -74,10 +82,12 @@ export async function GET(req: NextRequest) {
               sourceMeetingId: meeting.id,
               sourceMeetingTitle: meeting.title,
               sourceMeetingDate: meeting.date ? new Date(meeting.date) : null,
+              transcriptId: transcriptRow.id,
             };
           });
           const inserted = await db.insert(schema.signals).values(rows).returning();
-          return inserted.length;
+          const kept = await scoreSignalsOrDelete(inserted.map((r) => r.id));
+          return kept.length;
         })
       );
 

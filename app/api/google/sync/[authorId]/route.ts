@@ -4,6 +4,7 @@ import { db, schema } from "@/lib/db";
 import { eq, inArray, and } from "drizzle-orm";
 import { getValidGoogleToken, fetchGoogleMeetTranscripts } from "@/lib/google";
 import { generatePostsFromTranscript } from "@/lib/claude";
+import { scoreSignalsOrDelete } from "@/lib/signals-helpers";
 
 export async function POST(
   _req: NextRequest,
@@ -95,7 +96,8 @@ export async function POST(
       });
 
       const inserted = await db.insert(schema.signals).values(rows).returning();
-      totalSignals += inserted.length;
+      const kept = await scoreSignalsOrDelete(inserted.map((r) => r.id));
+      totalSignals += kept.length;
     } catch (e) {
       console.error(`[google-sync] Failed to process doc ${meeting.id}:`, e);
     }

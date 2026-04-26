@@ -4,6 +4,7 @@ import { db, schema } from "@/lib/db";
 import { eq, inArray, and } from "drizzle-orm";
 import { getValidFathomToken, fetchFathomMeetings } from "@/lib/fathom";
 import { generatePostsFromTranscript } from "@/lib/claude";
+import { ensureTranscript, scoreSignalsOrDelete } from "@/lib/signals-helpers";
 
 export async function POST(
   _req: NextRequest,
@@ -63,6 +64,14 @@ export async function POST(
       const generated = await generatePostsFromTranscript(meeting.transcript, authorContexts);
       if (!generated.length) continue;
 
+      const transcriptRow = await ensureTranscript({
+        title: meeting.title,
+        content: meeting.transcript,
+        source: "fathom",
+        sourceMeetingId: meeting.id,
+        sourceMeetingDate: meeting.date ? new Date(meeting.date) : null,
+      });
+
       const rows = generated.map((s) => {
         const recFramework = s.frameworkName
           ? allFrameworks.find((f) => f.name.toLowerCase() === s.frameworkName!.toLowerCase())
@@ -78,11 +87,13 @@ export async function POST(
           sourceMeetingId: meeting.id,
           sourceMeetingTitle: meeting.title,
           sourceMeetingDate: meeting.date ? new Date(meeting.date) : null,
+          transcriptId: transcriptRow.id,
         };
       });
 
       const inserted = await db.insert(schema.signals).values(rows).returning();
-      totalInserted += inserted.length;
+      const kept = await scoreSignalsOrDelete(inserted.map((r) => r.id));
+      totalInserted += kept.length;
     } catch (e: unknown) {
       console.error(`[fathom-sync] Failed to process meeting ${meeting.id}:`, e);
     }
