@@ -246,13 +246,14 @@ export default async function SignalsPage({
                   const taggedAngles = (s.contentAngles as string[] | null) ?? [];
                   const hashtags = ((s as any).hashtags as string[] | null) ?? [];
                   const signalTitle = (s as any).title as string | null;
-                  const preview = hashtags.length > 0
-                    ? hashtags.slice(0, 3).map((h: string) => `#${h}`).join(" ")
+                  const previewWords = hashtags.length > 0
+                    ? hashtags.slice(0, 4).join(", ")
                     : taggedAngles.length > 0
-                    ? taggedAngles.slice(0, 2).join(" · ")
+                    ? taggedAngles.slice(0, 3).join(", ")
                     : signalTitle
-                    ? signalTitle.trim().split(/\s+/).slice(0, 6).join(" ") + (signalTitle.trim().split(/\s+/).length > 6 ? "…" : "")
-                    : contentLines.slice(1).join(" ").trim().slice(0, 80) || "";
+                    ? signalTitle.trim().split(/\s+/).slice(0, 4).join(" ")
+                    : "";
+                  const preview = previewWords;
                   return (
                     <div
                       key={s.id}
