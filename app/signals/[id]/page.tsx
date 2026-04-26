@@ -29,6 +29,11 @@ export default async function SignalDetailPage({ params }: { params: { id: strin
   ]);
 
   if (!signal) notFound();
+
+  const hasTranscript = signal.transcriptId !== null || (signal.sourceTranscript ?? "").trim().length > 0;
+  const hasScores = signal.hookStrengthScore !== null;
+  if (!hasTranscript || !hasScores) redirect("/signals");
+
   if (session?.isAdmin && !session.isSuperAdmin) {
     const visibleAuthorIds = await getVisibleAuthorIds();
     const recId = signal.recommendedAuthorId;

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { db, schema } from "@/lib/db";
-import { desc, ne, eq, and, ilike, gte, lte, sql, inArray, or, isNull } from "drizzle-orm";
+import { desc, ne, eq, and, ilike, gte, lte, sql, inArray, or, isNull, isNotNull } from "drizzle-orm";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { timeAgo } from "@/lib/utils";
@@ -29,6 +29,11 @@ export default async function SignalsPage({
   const conditions: any[] = [
     ne(schema.signals.status, "archived"),
     ne(schema.signals.status, "drafting"),
+    or(
+      isNotNull(schema.signals.transcriptId),
+      isNotNull(schema.signals.sourceTranscript),
+    )!,
+    isNotNull(schema.signals.hookStrengthScore),
   ];
 
   if (visibleAuthorIds === null) {

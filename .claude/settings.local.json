@@ -5,7 +5,8 @@
       "Bash(echo \"EXIT=$?\")",
       "Bash(npm run *)",
       "Bash(git -C d:/signal log --oneline -5 lib/actions.ts)",
-      "Bash(git -C d:/signal diff --stat HEAD lib/actions.ts)"
+      "Bash(git -C d:/signal diff --stat HEAD lib/actions.ts)",
+      "Bash(npx tsx *)"
     ]
   }
 }
