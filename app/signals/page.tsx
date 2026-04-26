@@ -239,9 +239,9 @@ export default async function SignalsPage({
                   const contentLines = s.rawContent.split("\n").filter((l) => l.trim().length > 0);
                   const firstLine = contentLines[0] ?? s.rawContent;
                   const taggedAngles = (s.contentAngles as string[] | null) ?? [];
-                  const signalTitle = (s as any).title as string | null;
-                  const preview = signalTitle
-                    ? signalTitle.trim().split(/\s+/).slice(0, 5).join(" ") + (signalTitle.trim().split(/\s+/).length > 5 ? "…" : "")
+                  const hashtags = ((s as any).hashtags as string[] | null) ?? [];
+                  const preview = hashtags.length > 0
+                    ? hashtags.slice(0, 3).map((h: string) => `#${h}`).join(" ")
                     : taggedAngles.slice(0, 2).join(" · ");
                   return (
                     <div
@@ -264,9 +264,6 @@ export default async function SignalsPage({
                             <span key={tag} className="rounded-full bg-purple-500/8 px-2 py-0.5 text-[10px] font-medium text-purple-600 dark:text-purple-400">
                               {tag}
                             </span>
-                          ))}
-                          {((s as any).hashtags as string[] | null)?.slice(0, 3).map((h: string) => (
-                            <span key={h} className="text-muted-foreground/60">#{h}</span>
                           ))}
                           {preview && (
                             <>

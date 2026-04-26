@@ -64,9 +64,11 @@ export async function extractSignalsAction( // transcription vaildation + fetch 
       : undefined;
     return {
       rawContent: s.rawContent,
+      title: s.title ?? null,
       contentType: "post",
       speaker: null as string | null,
-      contentAngles: [] as string[],
+      hashtags: s.hashtags ?? [],
+      contentAngles: s.contentAngle ? [s.contentAngle] : [] as string[],
       recommendedAuthorId: recAuthor?.id ?? null,
       bestFrameworkId: recFramework?.id ?? null,
       source: "manual" as const,
