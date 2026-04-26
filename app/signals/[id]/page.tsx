@@ -44,19 +44,18 @@ export default async function SignalDetailPage({ params }: { params: { id: strin
     if (!allowed) redirect("/signals");
   }
 
-  // AI-select best framework for signals that don't have one yet (fire-and-forget)
+  // AI-select best framework on first open, then cache it on the signal
   if (!signal.bestFrameworkId && frameworks.length > 0) {
-    selectBestFramework(signal.rawContent, frameworks.map((f) => ({
+    const bestId = await selectBestFramework(signal.rawContent, frameworks.map((f) => ({
       id: f.id,
       name: f.name,
       description: f.description,
       bestFor: (f.bestFor as string[] | null) ?? [],
-    }))).then((bestId) => {
-      if (bestId) {
-        signal.bestFrameworkId = bestId;
-        db.update(schema.signals).set({ bestFrameworkId: bestId }).where(eq(schema.signals.id, id)).catch(() => {});
-      }
-    }).catch(() => {});
+    }))).catch(() => null);
+    if (bestId) {
+      signal.bestFrameworkId = bestId;
+      db.update(schema.signals).set({ bestFrameworkId: bestId }).where(eq(schema.signals.id, id)).catch(() => {});
+    }
   }
 
   // Load transcript in parallel with posts/analytics
