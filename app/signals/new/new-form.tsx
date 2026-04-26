@@ -64,7 +64,11 @@ export default function NewSignalsPage() {
     setExtracting(true);
     try {
       const res = await extractSignalsAction(transcript, meetingTitle || undefined, date || undefined);
-      toast({ title: `Found ${res.inserted} signal${res.inserted !== 1 ? "s" : ""}`, kind: "success" });
+      toast({
+        title: `Found ${res.inserted} signal${res.inserted !== 1 ? "s" : ""}`,
+        description: res.inserted === 0 && res.reason ? res.reason : undefined,
+        kind: res.inserted > 0 ? "success" : "info",
+      });
       router.push("/signals");
     } catch (e: any) {
       toast({ title: "Extraction failed", description: e?.message, kind: "error" });

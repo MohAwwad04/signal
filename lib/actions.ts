@@ -43,7 +43,7 @@ export async function extractSignalsAction( // transcription vaildation + fetch 
   }));
   const generated = await generatePostsFromTranscript(transcript, authorContexts, allFrameworks);
   console.log(`[extract] Claude returned ${generated.length} signal(s)`);
-  if (!generated.length) return { inserted: 0, signals: [] };
+  if (!generated.length) return { inserted: 0, signals: [], reason: "Claude found no qualifying moments in this transcript" };
   const [transcriptRow, visibleAuthorIds] = await Promise.all([
     ensureTranscript({
       title: meetingTitle ?? null,
@@ -80,13 +80,13 @@ export async function extractSignalsAction( // transcription vaildation + fetch 
   });
   const deduped = await deduplicateAgainstExisting(rows);
   console.log(`[extract] After dedup: ${deduped.length}/${rows.length} signal(s) remain`);
-  if (!deduped.length) return { inserted: 0, signals: [] };
+  if (!deduped.length) return { inserted: 0, signals: [], reason: "All signals matched existing ones (duplicates)" };
   const inserted = await db.insert(schema.signals).values(deduped).returning();
   const kept = await scoreSignalsOrDelete(inserted.map((r) => r.id));
   console.log(`[extract] After scoring: ${kept.length}/${inserted.length} signal(s) kept`);
   revalidatePath("/signals");
   revalidatePath("/");
-  return { inserted: kept.length, signals: inserted.filter((s) => kept.includes(s.id)) };
+  return { inserted: kept.length, signals: inserted.filter((s) => kept.includes(s.id)), reason: kept.length === 0 ? "All signals failed quality scoring" : "ok" };
 }
 
 export async function updateSignalContentAction(id: number, content: string) {

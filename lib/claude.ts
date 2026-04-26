@@ -307,7 +307,11 @@ ${chunk}
     }),
   );
 
+  rawResults.forEach((raw, i) => {
+    console.log(`[generateSignals] chunk ${i + 1} raw response (first 500 chars):`, raw.slice(0, 500));
+  });
   const allSignals = rawResults.flatMap(parseSignals);
+  console.log(`[generateSignals] total parsed signals before dedup: ${allSignals.length}`);
   return deduplicateAndRank(allSignals);
 }
 
