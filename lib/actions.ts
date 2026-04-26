@@ -30,7 +30,10 @@ export async function extractSignalsAction( // transcription vaildation + fetch 
   if (!transcript || transcript.length < 100) {
     throw new Error("Transcript is too short — paste more context.");
   }
-  const authors = await db.select().from(schema.authors).where(eq(schema.authors.active, true));
+  const [authors, allFrameworks] = await Promise.all([
+    db.select().from(schema.authors).where(eq(schema.authors.active, true)),
+    db.select({ id: schema.frameworks.id, name: schema.frameworks.name, description: schema.frameworks.description }).from(schema.frameworks),
+  ]);
   const authorContexts = authors.map((a) => ({
     role: a.role ?? "",
     contentAngles: (a.contentAngles as string[] | null) ?? [],
@@ -38,7 +41,7 @@ export async function extractSignalsAction( // transcription vaildation + fetch 
     voiceProfile: a.voiceProfile ?? undefined,
     performanceLearningHints: a.performanceLearningHints ?? undefined,
   }));
-  const generated = await generatePostsFromTranscript(transcript, authorContexts);
+  const generated = await generatePostsFromTranscript(transcript, authorContexts, allFrameworks);
   if (!generated.length) return { inserted: 0, signals: [] };
   const [transcriptRow, visibleAuthorIds] = await Promise.all([
     ensureTranscript({
@@ -56,12 +59,16 @@ export async function extractSignalsAction( // transcription vaildation + fetch 
           (visibleAuthorIds === null || visibleAuthorIds.includes(a.id))
         )
       : undefined;
+    const recFramework = s.frameworkName
+      ? allFrameworks.find((f) => f.name.toLowerCase() === s.frameworkName!.toLowerCase())
+      : undefined;
     return {
       rawContent: s.rawContent,
       contentType: "post",
       speaker: null as string | null,
       contentAngles: [] as string[],
       recommendedAuthorId: recAuthor?.id ?? null,
+      bestFrameworkId: recFramework?.id ?? null,
       source: "manual" as const,
       sourceMeetingTitle: meetingTitle ?? null,
       sourceMeetingDate: meetingDate ? new Date(meetingDate) : null,

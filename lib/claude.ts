@@ -174,6 +174,7 @@ function parseSignals(raw: string): GeneratedSignal[] {
 export async function generatePostsFromTranscript(
   transcript: string,
   authors: AuthorContext[],
+  frameworks: { name: string; description: string }[] = [],
 ): Promise<GeneratedSignal[]> {
   const authorBlock = authors
     .filter((a) => a.contentAngles.length > 0)
@@ -249,6 +250,9 @@ For each qualified moment:
 AUTHORS AND THEIR CONTENT ANGLES:
 ${authorBlock || `Any role from: ${fallbackRoles.join(", ")}`}
 
+${frameworks.length ? `AVAILABLE FRAMEWORKS — pick the ONE that best fits how this specific insight should be structured. Choose based on the insight's nature, not randomly:
+${frameworks.map((f) => `- ${f.name}: ${f.description}`).join("\n")}` : ""}
+
 Output format — use exactly this structure for each signal:
 POST 1:
 TITLE: [punchy 6–10 word hook title that captures the core insight — no fluff]
@@ -256,7 +260,7 @@ TITLE: [punchy 6–10 word hook title that captures the core insight — no fluf
 HASHTAGS: [3–5 relevant hashtags, comma-separated, no # symbol — e.g. leadership, b2bsales, startups]
 RECOMMENDED_FOR: [author role]
 CONTENT_ANGLE: [the specific content angle this maps to]
-FRAMEWORK: [recommended framework name, or leave blank]
+FRAMEWORK: [exact framework name from the list above that best fits this insight — must match exactly]
 SOURCE_QUOTE: [exact 1–2 sentences from the transcript that anchor this insight]
 
 POST 2:
@@ -292,6 +296,25 @@ ${chunk}
 
   const allSignals = rawResults.flatMap(parseSignals);
   return deduplicateAndRank(allSignals);
+}
+
+/* ---------- framework selection ---------- */
+
+export async function selectBestFramework(
+  signalContent: string,
+  frameworks: { id: number; name: string; description: string; bestFor: string[] | null }[]
+): Promise<number | null> {
+  if (!frameworks.length) return null;
+  const list = frameworks.map((f) => `- ${f.name}: ${f.description}${f.bestFor?.length ? ` (best for: ${f.bestFor.join(", ")})` : ""}`).join("\n");
+  const raw = await textCall({
+    maxTokens: 100,
+    temperature: 0.2,
+    system: `You are a LinkedIn content strategist. Given a signal (raw insight) and a list of post frameworks, pick the single framework that will make this insight hit hardest on LinkedIn. Consider the nature of the content — story, lesson, list, contrast, how-to, opinion — and match it to the framework built for that type.`,
+    user: `SIGNAL:\n${signalContent}\n\nFRAMEWORKS:\n${list}\n\nReply with ONLY the exact framework name that best fits this signal. Nothing else.`,
+  });
+  const name = raw.trim().replace(/^["'-]|["'-]$/g, "");
+  const match = frameworks.find((f) => f.name.toLowerCase() === name.toLowerCase());
+  return match?.id ?? null;
 }
 
 /* ---------- framework reformat ---------- */

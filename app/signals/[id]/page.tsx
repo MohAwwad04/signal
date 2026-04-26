@@ -11,6 +11,7 @@ import { AuthorCard, SignalAnglesCard, TranscriptCard, SignalStatsPanel, SourceE
 import { SendToReviewButton } from "./send-to-review-button";
 import { ScoresProvider } from "./scores-provider";
 import { getCurrentUser, getVisibleAuthorIds } from "@/lib/session";
+import { selectBestFramework } from "@/lib/claude";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -43,15 +44,19 @@ export default async function SignalDetailPage({ params }: { params: { id: strin
     if (!allowed) redirect("/signals");
   }
 
-  // Auto-star best framework for existing signals that don't have one yet (fire-and-forget)
+  // AI-select best framework for signals that don't have one yet (fire-and-forget)
   if (!signal.bestFrameworkId && frameworks.length > 0) {
-    const bestFw =
-      frameworks.find((f) => ((f.bestFor as string[] | null) ?? []).includes(signal.contentType ?? "")) ??
-      frameworks[0];
-    if (bestFw) {
-      signal.bestFrameworkId = bestFw.id;
-      db.update(schema.signals).set({ bestFrameworkId: bestFw.id }).where(eq(schema.signals.id, id)).catch(() => {});
-    }
+    selectBestFramework(signal.rawContent, frameworks.map((f) => ({
+      id: f.id,
+      name: f.name,
+      description: f.description,
+      bestFor: (f.bestFor as string[] | null) ?? [],
+    }))).then((bestId) => {
+      if (bestId) {
+        signal.bestFrameworkId = bestId;
+        db.update(schema.signals).set({ bestFrameworkId: bestId }).where(eq(schema.signals.id, id)).catch(() => {});
+      }
+    }).catch(() => {});
   }
 
   // Load transcript in parallel with posts/analytics
