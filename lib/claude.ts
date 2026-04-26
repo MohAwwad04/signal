@@ -138,7 +138,8 @@ function deduplicateAndRank(signals: GeneratedSignal[]): GeneratedSignal[] {
 
 function parseSignals(raw: string): GeneratedSignal[] {
   if (!/\bPOST \d+:/i.test(raw)) return [];
-  const parts = raw.split(/\bPOST \d+:/i).filter((p) => p.trim().length > 80);
+  // slice(1) drops everything before the first POST marker (preamble / reasoning text)
+  const parts = raw.split(/\bPOST \d+:/i).slice(1).filter((p) => p.trim().length > 80);
   return parts
     .map((part) => {
       const lines = part.trim().split("\n");
