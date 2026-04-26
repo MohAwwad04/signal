@@ -137,6 +137,7 @@ function deduplicateAndRank(signals: GeneratedSignal[]): GeneratedSignal[] {
 }
 
 function parseSignals(raw: string): GeneratedSignal[] {
+  if (!/\bPOST \d+:/i.test(raw)) return [];
   const parts = raw.split(/\bPOST \d+:/i).filter((p) => p.trim().length > 80);
   return parts
     .map((part) => {
