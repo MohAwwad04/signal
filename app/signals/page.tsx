@@ -24,7 +24,10 @@ export default async function SignalsPage({
   const session = await getCurrentUser();
   if (!session?.isAdmin && !session?.isSuperAdmin) redirect("/drafts");
 
-  const conditions: any[] = [ne(schema.signals.status, "archived")];
+  const conditions: any[] = [
+    ne(schema.signals.status, "archived"),
+    ne(schema.signals.status, "drafting"),
+  ];
 
   if (session?.isSuperAdmin) {
     // sees everything — no extra filter

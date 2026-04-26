@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { db, schema } from "@/lib/db";
-import { desc, sql, eq, and, or, isNull } from "drizzle-orm";
+import { desc, sql, eq, and, or, isNull, inArray } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/session";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -20,6 +20,31 @@ async function loadStats() {
         ? or(eq(schema.signals.recommendedAuthorId, session.authorId), isNull(schema.signals.recommendedAuthorId))
         : isNull(schema.signals.recommendedAuthorId);
 
+    let visibleAuthorIds: number[] | null = null;
+    if (!session?.isSuperAdmin) {
+      if (session?.isAdmin && session.email) {
+        const invited = await db
+          .select({ authorId: schema.users.authorId })
+          .from(schema.users)
+          .where(eq(schema.users.invitedBy, session.email))
+          .catch(() => []);
+        const ids = new Set<number>();
+        for (const u of invited) if (u.authorId != null) ids.add(u.authorId);
+        if (session.authorId) ids.add(session.authorId);
+        visibleAuthorIds = [...ids];
+      } else if (session?.authorId) {
+        visibleAuthorIds = [session.authorId];
+      } else {
+        visibleAuthorIds = [];
+      }
+    }
+
+    const authorScope = visibleAuthorIds === null
+      ? eq(schema.authors.active, true)
+      : visibleAuthorIds.length === 0
+        ? sql`false`
+        : and(eq(schema.authors.active, true), inArray(schema.authors.id, visibleAuthorIds));
+
     const [signalsByStatus, postsByStatus, authorsCount, recent] = await Promise.all([
       db.select({ status: schema.signals.status, count: sql<number>`count(*)::int` })
         .from(schema.signals)
@@ -28,7 +53,7 @@ async function loadStats() {
       db.select({ status: schema.posts.status, count: sql<number>`count(*)::int` })
         .from(schema.posts).groupBy(schema.posts.status),
       db.select({ count: sql<number>`count(*)::int` })
-        .from(schema.authors).where(eq(schema.authors.active, true)),
+        .from(schema.authors).where(authorScope),
       db.select({
         id: schema.posts.id,
         content: schema.posts.content,
