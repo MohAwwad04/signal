@@ -7,15 +7,20 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/components/ui/toaster";
-import { UserPlus, Trash2, ArrowUpRight } from "lucide-react";
+import { UserPlus, Trash2, ArrowUpRight, Search } from "lucide-react";
+import { cn } from "@/lib/utils";
 import type { User } from "@/lib/db/schema";
 
 type UserWithAuthor = User & { authorName?: string };
+type RoleFilter = "all" | "admin" | "user" | "superadmin";
 
 export function TeamManager({ users, isSuperAdmin }: { users: UserWithAuthor[]; isSuperAdmin: boolean }) {
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<"admin" | "user">("user");
   const [isPending, startTransition] = useTransition();
+
+  const [search, setSearch] = useState("");
+  const [roleFilter, setRoleFilter] = useState<RoleFilter>("all");
 
   function handleAdd() {
     startTransition(async () => {
@@ -34,6 +39,27 @@ export function TeamManager({ users, isSuperAdmin }: { users: UserWithAuthor[]; 
       await removeUserAction(id);
     });
   }
+
+  const filtered = users.filter((u) => {
+    if (roleFilter !== "all" && u.role !== roleFilter) return false;
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      const name = (u.authorName ?? "").toLowerCase();
+      const mail = u.email.toLowerCase();
+      if (!name.includes(q) && !mail.includes(q)) return false;
+    }
+    return true;
+  });
+
+  const roleCounts: Record<string, number> = {};
+  for (const u of users) roleCounts[u.role] = (roleCounts[u.role] ?? 0) + 1;
+
+  const filterTabs: { value: RoleFilter; label: string }[] = [
+    { value: "all", label: `All (${users.length})` },
+    ...(roleCounts["superadmin"] ? [{ value: "superadmin" as RoleFilter, label: `Superadmin (${roleCounts["superadmin"]})` }] : []),
+    ...(roleCounts["admin"] ? [{ value: "admin" as RoleFilter, label: `Admin (${roleCounts["admin"]})` }] : []),
+    ...(roleCounts["user"] ? [{ value: "user" as RoleFilter, label: `User (${roleCounts["user"]})` }] : []),
+  ];
 
   return (
     <div className="rounded-2xl border border-border bg-card p-6">
@@ -72,12 +98,49 @@ export function TeamManager({ users, isSuperAdmin }: { users: UserWithAuthor[]; 
         </Button>
       </div>
 
-      {users.length === 0 ? (
-        <p className="text-xs text-muted-foreground">No users added yet.</p>
+      {/* Filter bar */}
+      {users.length > 0 && (
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          {/* Role tabs */}
+          <div className="flex items-center gap-1 rounded-lg bg-muted p-0.5">
+            {filterTabs.map((tab) => (
+              <button
+                key={tab.value}
+                type="button"
+                onClick={() => setRoleFilter(tab.value)}
+                className={cn(
+                  "rounded-md px-3 py-1 text-xs font-medium transition-colors",
+                  roleFilter === tab.value
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Search */}
+          <div className="relative flex-1 min-w-[160px]">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search by name or email…"
+              className="h-8 pl-8 text-xs"
+            />
+          </div>
+        </div>
+      )}
+
+      {filtered.length === 0 ? (
+        <p className="text-xs text-muted-foreground">
+          {users.length === 0 ? "No users added yet." : "No users match your filter."}
+        </p>
       ) : (
         <ul className="space-y-2">
-          {users.map((u) => {
-            const isAdmin = u.role === "admin";
+          {filtered.map((u) => {
+            const isAdmin = u.role === "admin" || u.role === "superadmin";
             const label = u.authorName || u.email;
             const row = (
               <div className="flex items-center justify-between gap-3 w-full">
