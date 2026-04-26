@@ -130,12 +130,9 @@ export default async function SignalsPage({
     groupMap.get(key)!.signals.push(s);
   }
 
-  // Sorted: meetings first (most recent), then null group at the end
-  const groups = [...groupMap.values()].sort((a, b) => {
-    if (a.key === null) return 1;
-    if (b.key === null) return -1;
-    return (b.date?.getTime() ?? 0) - (a.date?.getTime() ?? 0);
-  });
+  const groups = [...groupMap.values()].sort((a, b) =>
+    (b.date?.getTime() ?? 0) - (a.date?.getTime() ?? 0)
+  );
 
   return (
     <div className="mx-auto w-full max-w-6xl p-6 md:p-10">
@@ -201,7 +198,7 @@ export default async function SignalsPage({
                 <div className="flex items-center gap-2 min-w-0">
                   <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60" />
                   <span className="text-sm font-semibold truncate">
-                    {group.title ?? "No transcript"}
+                    {group.title ?? `Transcript · ${(group.date ?? new Date()).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}`}
                   </span>
                   <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
                     {group.signals.length} signal{group.signals.length !== 1 ? "s" : ""}
