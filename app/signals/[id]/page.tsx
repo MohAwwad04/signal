@@ -10,7 +10,7 @@ import { PostEditor } from "./post-editor";
 import { AuthorCard, SignalAnglesCard, TranscriptCard, SignalStatsPanel, SourceExcerptCard } from "./sidebar-cards";
 import { SendToReviewButton } from "./send-to-review-button";
 import { ScoresProvider } from "./scores-provider";
-import { getCurrentUser } from "@/lib/session";
+import { getCurrentUser, getVisibleAuthorIds } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -29,7 +29,14 @@ export default async function SignalDetailPage({ params }: { params: { id: strin
   ]);
 
   if (!signal) notFound();
-  if (session?.isAdmin && !session.isSuperAdmin && signal.recommendedAuthorId !== session.authorId) redirect("/signals");
+  if (session?.isAdmin && !session.isSuperAdmin) {
+    const visibleAuthorIds = await getVisibleAuthorIds();
+    const recId = signal.recommendedAuthorId;
+    const allowed =
+      recId === null ||
+      (visibleAuthorIds !== null && visibleAuthorIds.includes(recId));
+    if (!allowed) redirect("/signals");
+  }
 
   // Auto-star best framework for existing signals that don't have one yet (fire-and-forget)
   if (!signal.bestFrameworkId && frameworks.length > 0) {
