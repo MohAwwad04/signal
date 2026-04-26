@@ -10,6 +10,7 @@ import { Plus, Linkedin, Archive, Radio, ArrowUpRight, FileText } from "lucide-r
 import { SignalFilterBar } from "./filter-bar";
 import { getCurrentUser, getVisibleAuthorIds } from "@/lib/session";
 import { SendSignalButton } from "./send-signal-button";
+import { GroupTitleEdit } from "./group-title-edit";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -217,9 +218,13 @@ export default async function SignalsPage({
               <div className="mb-3 flex items-center gap-3">
                 <div className="flex items-center gap-2 min-w-0">
                   <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60" />
-                  <span className="text-sm font-semibold truncate">
-                    {group.title ?? `Transcript · ${(group.date ?? new Date()).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}${(groupNumbers.get(group.key) ?? 0) > 1 || (untitledByDay.get((group.date ?? new Date()).toDateString()) ?? 0) > 1 ? ` · #${groupNumbers.get(group.key)}` : ""}`}
-                  </span>
+                  {(() => {
+                    const transcriptId = group.key.startsWith("transcript:") ? Number(group.key.slice("transcript:".length)) : null;
+                    const displayTitle = group.title ?? `Transcript · ${(group.date ?? new Date()).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}${(groupNumbers.get(group.key) ?? 0) > 1 || (untitledByDay.get((group.date ?? new Date()).toDateString()) ?? 0) > 1 ? ` · #${groupNumbers.get(group.key)}` : ""}`;
+                    return transcriptId
+                      ? <GroupTitleEdit transcriptId={transcriptId} title={displayTitle} />
+                      : <span className="text-sm font-semibold truncate">{displayTitle}</span>;
+                  })()}
                   <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
                     {group.signals.length} signal{group.signals.length !== 1 ? "s" : ""}
                   </span>

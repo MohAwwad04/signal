@@ -128,6 +128,16 @@ export async function applyFrameworkToSignalAction(content: string, frameworkId:
   return reformatPostWithFramework(content, framework);
 }
 
+export async function renameTranscriptGroupAction(transcriptId: number, title: string) {
+  const trimmed = title.trim();
+  if (!trimmed) return;
+  await Promise.all([
+    db.update(schema.transcripts).set({ title: trimmed }).where(eq(schema.transcripts.id, transcriptId)),
+    db.update(schema.signals).set({ sourceMeetingTitle: trimmed }).where(eq(schema.signals.transcriptId, transcriptId)),
+  ]);
+  revalidatePath("/signals");
+}
+
 export async function archiveSignalAction(id: number) {
   await db.update(schema.signals).set({ status: "archived", archivedAt: new Date() }).where(eq(schema.signals.id, id));
   revalidatePath("/signals");
