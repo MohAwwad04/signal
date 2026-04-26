@@ -1,13 +1,13 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { db, schema } from "@/lib/db";
-import { eq, desc, and } from "drizzle-orm";
+import { eq, desc, and, or, isNull, inArray } from "drizzle-orm";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Archive } from "lucide-react";
 import { timeAgo } from "@/lib/utils";
 import { ArchiveActions } from "./archive-actions";
-import { getCurrentUser } from "@/lib/session";
+import { getCurrentUser, getVisibleAuthorIds } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -15,11 +15,28 @@ export const revalidate = 0;
 export default async function ArchivePage() {
   const session = await getCurrentUser();
   if (!session?.isAdmin && !session?.isSuperAdmin) redirect("/drafts");
-  const archiveFilter = session?.isSuperAdmin
-    ? eq(schema.signals.status, "archived")
-    : and(eq(schema.signals.status, "archived"), session?.authorId
-        ? eq(schema.signals.recommendedAuthorId, session.authorId)
-        : eq(schema.signals.id, -1));
+
+  const visibleAuthorIds = await getVisibleAuthorIds();
+  const archConds: any[] = [eq(schema.signals.status, "archived")];
+  if (visibleAuthorIds === null) {
+    // superadmin
+  } else if (session?.isAdmin) {
+    if (visibleAuthorIds.length > 0) {
+      archConds.push(
+        or(
+          inArray(schema.signals.recommendedAuthorId, visibleAuthorIds),
+          isNull(schema.signals.recommendedAuthorId),
+        )!
+      );
+    } else {
+      archConds.push(isNull(schema.signals.recommendedAuthorId));
+    }
+  } else if (visibleAuthorIds.length > 0) {
+    archConds.push(inArray(schema.signals.recommendedAuthorId, visibleAuthorIds));
+  } else {
+    archConds.push(eq(schema.signals.id, -1));
+  }
+  const archiveFilter = and(...archConds);
 
   const [archived, authors] = await Promise.all([
     db.select().from(schema.signals).where(archiveFilter).orderBy(desc(schema.signals.archivedAt)),

@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { timeAgo } from "@/lib/utils";
 import { Plus, Linkedin, Archive, Radio, ArrowUpRight, FileText } from "lucide-react";
 import { SignalFilterBar } from "./filter-bar";
-import { getCurrentUser } from "@/lib/session";
+import { getCurrentUser, getVisibleAuthorIds } from "@/lib/session";
 import { SendSignalButton } from "./send-signal-button";
 
 export const dynamic = "force-dynamic";
@@ -24,26 +24,30 @@ export default async function SignalsPage({
   const session = await getCurrentUser();
   if (!session?.isAdmin && !session?.isSuperAdmin) redirect("/drafts");
 
+  const visibleAuthorIds = await getVisibleAuthorIds();
+
   const conditions: any[] = [
     ne(schema.signals.status, "archived"),
     ne(schema.signals.status, "drafting"),
   ];
 
-  if (session?.isSuperAdmin) {
-    // sees everything — no extra filter
+  if (visibleAuthorIds === null) {
+    // superadmin — no extra filter
   } else if (session?.isAdmin) {
-    if (session.authorId) {
+    if (visibleAuthorIds.length > 0) {
       conditions.push(
         or(
-          eq(schema.signals.recommendedAuthorId, session.authorId),
+          inArray(schema.signals.recommendedAuthorId, visibleAuthorIds),
           isNull(schema.signals.recommendedAuthorId),
         )!
       );
     } else {
       conditions.push(isNull(schema.signals.recommendedAuthorId));
     }
-  } else if (session?.authorId) {
-    conditions.push(eq(schema.signals.recommendedAuthorId, session.authorId));
+  } else if (visibleAuthorIds.length > 0) {
+    conditions.push(inArray(schema.signals.recommendedAuthorId, visibleAuthorIds));
+  } else {
+    conditions.push(eq(schema.signals.id, -1));
   }
 
   if (q) conditions.push(ilike(schema.signals.rawContent, `%${q}%`));
@@ -56,7 +60,29 @@ export default async function SignalsPage({
     db.select().from(schema.signals).where(and(...conditions)).orderBy(desc(schema.signals.createdAt)).limit(200),
     db.select({ id: schema.authors.id, name: schema.authors.name }).from(schema.authors).where(eq(schema.authors.active, true)),
     db.select({ id: schema.contentAngles.id, name: schema.contentAngles.name }).from(schema.contentAngles).orderBy(schema.contentAngles.name),
-    db.select({ id: schema.signals.id }).from(schema.signals).where(eq(schema.signals.status, "archived")).then((r) => r.length),
+    (async () => {
+      const archConds: any[] = [eq(schema.signals.status, "archived")];
+      if (visibleAuthorIds === null) {
+        // superadmin — no extra filter
+      } else if (session?.isAdmin) {
+        if (visibleAuthorIds.length > 0) {
+          archConds.push(
+            or(
+              inArray(schema.signals.recommendedAuthorId, visibleAuthorIds),
+              isNull(schema.signals.recommendedAuthorId),
+            )!
+          );
+        } else {
+          archConds.push(isNull(schema.signals.recommendedAuthorId));
+        }
+      } else if (visibleAuthorIds.length > 0) {
+        archConds.push(inArray(schema.signals.recommendedAuthorId, visibleAuthorIds));
+      } else {
+        archConds.push(eq(schema.signals.id, -1));
+      }
+      const r = await db.select({ id: schema.signals.id }).from(schema.signals).where(and(...archConds));
+      return r.length;
+    })(),
   ]);
 
   // Draft post counts per signal (to show "Send to user" button)

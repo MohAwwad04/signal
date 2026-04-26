@@ -12,6 +12,24 @@ export type SessionUser = {
   isAdmin: boolean;
 };
 
+export const getVisibleAuthorIds = cache(async (): Promise<number[] | null> => {
+  const session = await getCurrentUser();
+  if (!session) return [];
+  if (session.isSuperAdmin) return null;
+  if (session.isAdmin && session.email) {
+    const invited = await db
+      .select({ authorId: schema.users.authorId })
+      .from(schema.users)
+      .where(eq(schema.users.invitedBy, session.email))
+      .catch(() => []);
+    const ids = new Set<number>();
+    for (const u of invited) if (u.authorId != null) ids.add(u.authorId);
+    if (session.authorId) ids.add(session.authorId);
+    return [...ids];
+  }
+  return session.authorId ? [session.authorId] : [];
+});
+
 export const getCurrentUser = cache(async (): Promise<SessionUser | null> => {
   const cookieStore = cookies();
   const email = cookieStore.get("signal_email")?.value?.toLowerCase().trim();

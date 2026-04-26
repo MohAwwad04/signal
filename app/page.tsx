@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { db, schema } from "@/lib/db";
 import { desc, sql, eq, and, or, isNull, inArray } from "drizzle-orm";
-import { getCurrentUser } from "@/lib/session";
+import { getCurrentUser, getVisibleAuthorIds } from "@/lib/session";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -14,36 +14,30 @@ export const revalidate = 0;
 async function loadStats() {
   try {
     const session = await getCurrentUser();
-    const signalScope = session?.isSuperAdmin
-      ? undefined
-      : session?.authorId
-        ? or(eq(schema.signals.recommendedAuthorId, session.authorId), isNull(schema.signals.recommendedAuthorId))
-        : isNull(schema.signals.recommendedAuthorId);
+    const visibleAuthorIds = await getVisibleAuthorIds();
 
-    let visibleAuthorIds: number[] | null = null;
-    if (!session?.isSuperAdmin) {
-      if (session?.isAdmin && session.email) {
-        const invited = await db
-          .select({ authorId: schema.users.authorId })
-          .from(schema.users)
-          .where(eq(schema.users.invitedBy, session.email))
-          .catch(() => []);
-        const ids = new Set<number>();
-        for (const u of invited) if (u.authorId != null) ids.add(u.authorId);
-        if (session.authorId) ids.add(session.authorId);
-        visibleAuthorIds = [...ids];
-      } else if (session?.authorId) {
-        visibleAuthorIds = [session.authorId];
-      } else {
-        visibleAuthorIds = [];
-      }
+    let signalScope: any = undefined;
+    if (visibleAuthorIds === null) {
+      // superadmin — count globally
+    } else if (session?.isAdmin) {
+      signalScope = visibleAuthorIds.length > 0
+        ? or(inArray(schema.signals.recommendedAuthorId, visibleAuthorIds), isNull(schema.signals.recommendedAuthorId))
+        : isNull(schema.signals.recommendedAuthorId);
+    } else if (visibleAuthorIds.length > 0) {
+      signalScope = inArray(schema.signals.recommendedAuthorId, visibleAuthorIds);
+    } else {
+      signalScope = sql`false`;
     }
 
-    const authorScope = visibleAuthorIds === null
+    // Authors tile: invited users only (exclude self) for admins; all active for superadmin; own for user
+    const authorTileIds = visibleAuthorIds === null
+      ? null
+      : visibleAuthorIds.filter((id) => id !== session?.authorId);
+    const authorScope = authorTileIds === null
       ? eq(schema.authors.active, true)
-      : visibleAuthorIds.length === 0
+      : authorTileIds.length === 0
         ? sql`false`
-        : and(eq(schema.authors.active, true), inArray(schema.authors.id, visibleAuthorIds));
+        : and(eq(schema.authors.active, true), inArray(schema.authors.id, authorTileIds));
 
     const [signalsByStatus, postsByStatus, authorsCount, recent] = await Promise.all([
       db.select({ status: schema.signals.status, count: sql<number>`count(*)::int` })
