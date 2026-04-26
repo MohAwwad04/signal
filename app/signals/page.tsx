@@ -238,11 +238,11 @@ export default async function SignalsPage({
                   const authorName = s.recommendedAuthorId ? authorMap.get(s.recommendedAuthorId) : null;
                   const contentLines = s.rawContent.split("\n").filter((l) => l.trim().length > 0);
                   const firstLine = contentLines[0] ?? s.rawContent;
+                  const taggedAngles = (s.contentAngles as string[] | null) ?? [];
                   const signalTitle = (s as any).title as string | null;
                   const preview = signalTitle
                     ? signalTitle.trim().split(/\s+/).slice(0, 5).join(" ") + (signalTitle.trim().split(/\s+/).length > 5 ? "…" : "")
                     : taggedAngles.slice(0, 2).join(" · ");
-                  const taggedAngles = (s.contentAngles as string[] | null) ?? [];
                   return (
                     <div
                       key={s.id}
