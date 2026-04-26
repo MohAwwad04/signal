@@ -221,15 +221,30 @@ REJECT: small talk, status updates, vague plans, obvious statements, anything wi
 
 If nothing meets this bar → return 0 signals. Never manufacture content to fill space.
 
-PHASE 2 — MATCH TO THE RIGHT AUTHOR AND ANGLE
+PHASE 2 — MATCH TO THE RIGHT AUTHOR AND WRITE A SELF-CONTAINED SIGNAL
 For each qualified moment:
 1. Pick the author whose content angles genuinely match the insight — don't force a match
 2. Identify the exact content angle it maps to
-3. Write the raw insight paragraph (3–6 sentences) following these rules exactly:
-   - OPEN with the most surprising or specific detail from the transcript — never with context-setting ("We were in a meeting…", "This quarter we…")
-   - INCLUDE at least one concrete anchor: a number, a date, a name, or a "we did X and Y happened" structure lifted directly from the transcript
-   - END with the transferable lesson stated plainly as a declarative sentence — not a question, not a vague reflection
-   - The paragraph must read like a strong first draft someone could post, not a note-to-self or summary
+3. Write the raw insight as a standalone publishable signal (3–6 sentences) following ALL of these rules:
+
+   SELF-CONTAINMENT (most important rule):
+   - The signal must make 100% sense to a stranger who has NEVER seen this transcript, call, or meeting
+   - Never reference "the meeting", "our call", "we discussed", "this quarter", "our team", or any internal context
+   - Every specific detail (number, outcome, name, result) must be explained inline so any reader can follow
+   - Replace "we" with "I" or make it universal — it must sound like a public post, not a meeting note
+   - If the insight cannot be made self-contained without losing its meaning → REJECT it
+
+   STRUCTURE:
+   - OPEN with the most surprising or specific detail — stated as a universal truth or personal experience, never as "in our meeting we found…"
+   - INCLUDE at least one concrete anchor: a real number, a before/after result, or a named outcome — explained plainly
+   - END with the transferable lesson as a plain declarative sentence any professional can apply
+   - It must read like a strong LinkedIn post draft, not a note-to-self or internal summary
+
+   QUALITY GATE — reject the signal if:
+   - It makes no sense without knowing who these people are or what the meeting was about
+   - It contains only a vague observation with no specific proof
+   - It is a meeting update, not an insight ("We decided to launch in Q3" → reject)
+   - A reader would ask "so what?" after reading it
 
 AUTHORS AND THEIR CONTENT ANGLES:
 ${authorBlock || `Any role from: ${fallbackRoles.join(", ")}`}
@@ -283,26 +298,53 @@ ${chunk}
 
 export async function reformatPostWithFramework(
   content: string,
-  framework: { name: string; promptTemplate: string }
+  framework: { name: string; description: string; promptTemplate: string; bestFor: string[] | null }
 ): Promise<string> {
+  const bestForLine = framework.bestFor?.length
+    ? `Best used for: ${framework.bestFor.join(", ")}`
+    : "";
+
   return textCall({
     maxTokens: 2000,
-    temperature: 0.7,
-    system: `You are an expert LinkedIn ghostwriter. Reformat the given post to follow a specific writing framework while keeping ALL the original ideas, facts, emojis, and hashtags intact.`,
-    user: `Framework: ${framework.name}
-Framework instructions: ${framework.promptTemplate}
+    temperature: 0.4,
+    system: `${GLOBAL_RULES}
 
-Reformat the post below to follow this framework exactly.
-- Keep every idea, insight, emoji, and hashtag from the original
-- Do NOT add new information
-- Do NOT remove existing information
-- Only restructure the flow and format to match the framework
-- Keep LinkedIn short-line style
+You are also a master of LinkedIn post structure and formatting frameworks.
+When reformatting a post, your job is to surgically restructure it — not rewrite it.
+The voice, specific details, numbers, insights, emojis, and hashtags must all survive intact.
+Only the architecture changes. The result must feel like the same author wrote it in a different structure.`,
+    user: `## FRAMEWORK TO APPLY
+Name: ${framework.name}
+Description: ${framework.description}
+${bestForLine}
 
-ORIGINAL POST:
+### Framework instructions:
+${framework.promptTemplate}
+
+---
+
+## ORIGINAL POST
 ${content}
 
-Return only the reformatted post — no explanations, no labels.`,
+---
+
+## YOUR TASK
+Restructure the post above using the "${framework.name}" framework. Follow this process:
+
+1. IDENTIFY the core insight, hook, story beats, and CTA in the original
+2. MAP each element to the framework's structure
+3. REWRITE the layout only — preserve every specific detail, number, outcome, emoji, and hashtag
+4. FORMAT for LinkedIn: short punchy lines, strategic white space, no walls of text
+5. HOOK must be stronger than the original — lead with the most compelling line
+
+RULES:
+- Do NOT invent new facts, claims, or examples
+- Do NOT remove any specific insight, number, or result from the original
+- Do NOT add generic filler sentences
+- Match the original author's tone and vocabulary
+- If the framework has a specific line count or section structure, follow it precisely
+
+Return ONLY the reformatted post. No labels, no explanations, no commentary.`,
   });
 }
 
