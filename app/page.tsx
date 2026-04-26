@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { db, schema } from "@/lib/db";
-import { desc, sql, eq } from "drizzle-orm";
+import { desc, sql, eq, and, or, isNull } from "drizzle-orm";
+import { getCurrentUser } from "@/lib/session";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -12,9 +13,18 @@ export const revalidate = 0;
 
 async function loadStats() {
   try {
+    const session = await getCurrentUser();
+    const signalScope = session?.isSuperAdmin
+      ? undefined
+      : session?.authorId
+        ? or(eq(schema.signals.recommendedAuthorId, session.authorId), isNull(schema.signals.recommendedAuthorId))
+        : isNull(schema.signals.recommendedAuthorId);
+
     const [signalsByStatus, postsByStatus, authorsCount, recent] = await Promise.all([
       db.select({ status: schema.signals.status, count: sql<number>`count(*)::int` })
-        .from(schema.signals).groupBy(schema.signals.status),
+        .from(schema.signals)
+        .where(signalScope)
+        .groupBy(schema.signals.status),
       db.select({ status: schema.posts.status, count: sql<number>`count(*)::int` })
         .from(schema.posts).groupBy(schema.posts.status),
       db.select({ count: sql<number>`count(*)::int` })

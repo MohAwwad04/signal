@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { db, schema } from "@/lib/db";
-import { desc, ne, eq, and, ilike, gte, lte, sql, inArray } from "drizzle-orm";
+import { desc, ne, eq, and, ilike, gte, lte, sql, inArray, or, isNull } from "drizzle-orm";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { timeAgo } from "@/lib/utils";
@@ -29,8 +29,16 @@ export default async function SignalsPage({
   if (session?.isSuperAdmin) {
     // sees everything — no extra filter
   } else if (session?.isAdmin) {
-    if (session.authorId) conditions.push(eq(schema.signals.recommendedAuthorId, session.authorId));
-    else conditions.push(eq(schema.signals.id, -1));
+    if (session.authorId) {
+      conditions.push(
+        or(
+          eq(schema.signals.recommendedAuthorId, session.authorId),
+          isNull(schema.signals.recommendedAuthorId),
+        )!
+      );
+    } else {
+      conditions.push(isNull(schema.signals.recommendedAuthorId));
+    }
   } else if (session?.authorId) {
     conditions.push(eq(schema.signals.recommendedAuthorId, session.authorId));
   }
@@ -165,7 +173,7 @@ export default async function SignalsPage({
                     {group.signals.length} signal{group.signals.length !== 1 ? "s" : ""}
                   </span>
                 </div>
-                {group.date && group.key !== null && (
+                {group.date && (
                   <span className="shrink-0 text-[11px] text-muted-foreground/60">
                     {group.date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
                   </span>
