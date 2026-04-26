@@ -245,9 +245,14 @@ export default async function SignalsPage({
                   const firstLine = contentLines[0] ?? s.rawContent;
                   const taggedAngles = (s.contentAngles as string[] | null) ?? [];
                   const hashtags = ((s as any).hashtags as string[] | null) ?? [];
+                  const signalTitle = (s as any).title as string | null;
                   const preview = hashtags.length > 0
                     ? hashtags.slice(0, 3).map((h: string) => `#${h}`).join(" ")
-                    : taggedAngles.slice(0, 2).join(" · ");
+                    : taggedAngles.length > 0
+                    ? taggedAngles.slice(0, 2).join(" · ")
+                    : signalTitle
+                    ? signalTitle.trim().split(/\s+/).slice(0, 6).join(" ") + (signalTitle.trim().split(/\s+/).length > 6 ? "…" : "")
+                    : contentLines.slice(1).join(" ").trim().slice(0, 80) || "";
                   return (
                     <div
                       key={s.id}
