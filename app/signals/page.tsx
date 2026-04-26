@@ -144,9 +144,10 @@ export default async function SignalsPage({
   );
 
   // Number untitled transcript groups so same-day ones are distinguishable.
+  // Iterate oldest-first so older transcripts get lower numbers (#1, #2, …).
   const untitledByDay = new Map<string, number>();
   const groupNumbers = new Map<string, number>();
-  for (const g of groups) {
+  for (const g of [...groups].reverse()) {
     if (!g.title) {
       const day = (g.date ?? new Date()).toDateString();
       const n = (untitledByDay.get(day) ?? 0) + 1;
