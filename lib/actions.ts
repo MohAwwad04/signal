@@ -505,6 +505,10 @@ export async function createManualSignalAction(input: { title?: string; content:
   return row;
 }
 
+export async function scoreContentAction(content: string) {
+  return scorePost(content);
+}
+
 export async function scoreSignalAction(signalId: number) {
   const [signal] = await db.select().from(schema.signals).where(eq(schema.signals.id, signalId));
   if (!signal) throw new Error("Signal not found.");

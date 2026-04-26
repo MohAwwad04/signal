@@ -9,6 +9,7 @@ import {
   applyFrameworkToSignalAction,
   updateSignalBestFrameworkAction,
   scoreSignalAction,
+  scoreContentAction,
   generatePostAction,
   updatePostContentAction,
   submitForReviewAction,
@@ -75,9 +76,12 @@ export function PostEditor({
       await updateSignalContentAction(signalId, draft);
       setContent(draft);
       setEditing(false);
+      setActiveFrameworkId(null);
       toast({ title: "Saved ✓", kind: "success" });
-      scoreSignalAction(signalId).then((s) => {
+      // Score the saved draft content and persist scores
+      scoreContentAction(draft).then(async (s) => {
         setScores({ hookStrength: s.hookStrength, specificity: s.specificity, clarity: s.clarity, emotionalResonance: s.emotionalResonance, callToAction: s.callToAction });
+        await scoreSignalAction(signalId);
       }).catch(() => {});
     } catch (e: any) {
       toast({ title: "Failed to save", description: e.message, kind: "error" });
@@ -109,6 +113,10 @@ export function PostEditor({
       setDraft(reformatted);
       setActiveFrameworkId(fw.id);
       setEditing(true);
+      // Preview scores on the reformatted content immediately
+      scoreContentAction(reformatted).then((s) => {
+        setScores({ hookStrength: s.hookStrength, specificity: s.specificity, clarity: s.clarity, emotionalResonance: s.emotionalResonance, callToAction: s.callToAction });
+      }).catch(() => {});
     } catch (e: any) {
       toast({ title: "Failed to apply framework", description: e.message, kind: "error" });
     } finally {
