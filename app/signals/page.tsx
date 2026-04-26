@@ -4,13 +4,11 @@ import { redirect } from "next/navigation";
 import { db, schema } from "@/lib/db";
 import { desc, ne, eq, and, ilike, gte, lte, sql, inArray, or, isNull, isNotNull } from "drizzle-orm";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { timeAgo } from "@/lib/utils";
-import { Plus, Linkedin, Archive, Radio, ArrowUpRight, FileText } from "lucide-react";
+import { Plus, Archive, Radio } from "lucide-react";
 import { SignalFilterBar } from "./filter-bar";
 import { getCurrentUser, getVisibleAuthorIds } from "@/lib/session";
-import { SendSignalButton } from "./send-signal-button";
-import { GroupTitleEdit } from "./group-title-edit";
+import { SignalsList } from "./signals-list";
+import type { SignalGroup } from "./signals-list";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -212,113 +210,40 @@ export default async function SignalsPage({
           )}
         </div>
       ) : (
-        <div className="space-y-8">
-          {groups.map((group) => (
-            <div key={group.key ?? "__none__"}>
-              {/* Group header */}
-              <div className="mb-3 flex items-center gap-3">
-                <div className="flex items-center gap-2 min-w-0">
-                  <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60" />
-                  {(() => {
-                    const transcriptId = group.key.startsWith("transcript:") ? Number(group.key.slice("transcript:".length)) : null;
-                    const displayTitle = group.title ?? `Transcript · ${(group.date ?? new Date()).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}${(groupNumbers.get(group.key) ?? 0) > 1 || (untitledByDay.get((group.date ?? new Date()).toDateString()) ?? 0) > 1 ? ` · #${groupNumbers.get(group.key)}` : ""}`;
-                    return transcriptId
-                      ? <GroupTitleEdit transcriptId={transcriptId} title={displayTitle} />
-                      : <span className="text-sm font-semibold truncate">{displayTitle}</span>;
-                  })()}
-                  <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-                    {group.signals.length} signal{group.signals.length !== 1 ? "s" : ""}
-                  </span>
-                </div>
-                {group.date && (
-                  <span className="shrink-0 text-[11px] text-muted-foreground/60">
-                    {group.date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
-                  </span>
-                )}
-                <div className="flex-1 h-px bg-border/60" />
-              </div>
-
-              {/* Signals in this group */}
-              <div className="grid gap-2">
-                {group.signals.map((s) => {
-                  const authorName = s.recommendedAuthorId ? authorMap.get(s.recommendedAuthorId) : null;
-                  const contentLines = s.rawContent.split("\n").filter((l) => l.trim().length > 0);
-                  const firstLine = contentLines[0] ?? s.rawContent;
-                  const taggedAngles = (s.contentAngles as string[] | null) ?? [];
-                  const hashtags = ((s as any).hashtags as string[] | null) ?? [];
-                  const signalTitle = (s as any).title as string | null;
-                  const previewHashtags = hashtags.slice(0, 4);
-                  const previewAngles = !previewHashtags.length ? taggedAngles.slice(0, 4) : [];
-                  const previewTitle = !previewHashtags.length && !previewAngles.length && signalTitle
-                    ? signalTitle.trim().split(/\s+/).slice(0, 5).join(" ")
-                    : null;
-                  return (
-                    <div
-                      key={s.id}
-                      className="group flex items-start justify-between gap-4 rounded-2xl border border-border bg-card p-4 transition-all duration-200 hover:border-primary/30 hover:shadow-glow-sm hover:-translate-y-0.5"
-                    >
-                      <Link href={`/signals/${s.id}`} className="min-w-0 flex-1">
-                        <p className="line-clamp-2 text-sm font-medium leading-snug">{firstLine}</p>
-                        <div className="mt-2.5 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
-                          <Badge variant={s.status === "unused" ? "warning" : s.status === "used" ? "success" : "secondary"}>
-                            {s.status}
-                          </Badge>
-                          {authorName && (
-                            <span className="flex items-center gap-1">
-                              <Linkedin className="h-3 w-3" />
-                              {authorName}
-                            </span>
-                          )}
-                          {taggedAngles.slice(0, 2).map((tag) => (
-                            <span key={tag} className="rounded-full bg-purple-500/8 px-2 py-0.5 text-[10px] font-medium text-purple-600 dark:text-purple-400">
-                              {tag}
-                            </span>
-                          ))}
-                          {previewHashtags.length > 0 && (
-                            <>
-                              <span className="text-muted-foreground/40">·</span>
-                              {previewHashtags.map((tag) => (
-                                <span key={tag} className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground/70">
-                                  #{tag}
-                                </span>
-                              ))}
-                            </>
-                          )}
-                          {previewAngles.length > 0 && (
-                            <>
-                              <span className="text-muted-foreground/40">·</span>
-                              {previewAngles.map((tag) => (
-                                <span key={tag} className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground/70">
-                                  {tag}
-                                </span>
-                              ))}
-                            </>
-                          )}
-                          {previewTitle && (
-                            <>
-                              <span className="text-muted-foreground/40">·</span>
-                              <span className="italic text-muted-foreground/50 truncate max-w-[220px]">{previewTitle}</span>
-                            </>
-                          )}
-                          <span className="text-muted-foreground/40">·</span>
-                          <span>{timeAgo(s.createdAt)}</span>
-                        </div>
-                      </Link>
-                      <div className="flex shrink-0 items-center gap-2">
-                        {(draftCountMap.get(s.id) ?? 0) > 0 && (
-                          <SendSignalButton signalId={s.id} />
-                        )}
-                        <Link href={`/signals/${s.id}`}>
-                          <ArrowUpRight className="h-4 w-4 text-muted-foreground/30 transition-all duration-200 group-hover:text-primary group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
-                        </Link>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
-        </div>
+        <SignalsList
+          groups={groups.map((group): SignalGroup => {
+            const transcriptId = group.key.startsWith("transcript:")
+              ? Number(group.key.slice("transcript:".length))
+              : null;
+            const date = group.date ?? new Date();
+            const showNumber =
+              (groupNumbers.get(group.key) ?? 0) > 1 ||
+              (untitledByDay.get(date.toDateString()) ?? 0) > 1;
+            const displayTitle =
+              group.title ??
+              `Transcript · ${date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}${showNumber ? ` · #${groupNumbers.get(group.key)}` : ""}`;
+            return {
+              key: group.key,
+              displayTitle,
+              transcriptId,
+              dateStr: group.date
+                ? group.date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
+                : null,
+              signals: group.signals.map((s) => ({
+                id: s.id,
+                status: s.status,
+                rawContent: s.rawContent,
+                recommendedAuthorId: s.recommendedAuthorId ?? null,
+                contentAngles: (s.contentAngles as string[] | null) ?? null,
+                hashtags: ((s as any).hashtags as string[] | null) ?? null,
+                title: ((s as any).title as string | null) ?? null,
+                createdAtMs: s.createdAt.getTime(),
+              })),
+            };
+          })}
+          authorMap={Object.fromEntries(authorMap)}
+          draftCountMap={Object.fromEntries(draftCountMap)}
+        />
       )}
     </div>
   );

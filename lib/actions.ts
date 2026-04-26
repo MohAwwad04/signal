@@ -144,6 +144,13 @@ export async function archiveSignalAction(id: number) {
   revalidatePath("/signals/archive");
 }
 
+export async function bulkArchiveSignalsAction(ids: number[]) {
+  if (!ids.length) return;
+  await db.update(schema.signals).set({ status: "archived", archivedAt: new Date() }).where(inArray(schema.signals.id, ids));
+  revalidatePath("/signals");
+  revalidatePath("/signals/archive");
+}
+
 export async function deleteSignalPermanentlyAction(id: number) {
   await db.delete(schema.signals).where(eq(schema.signals.id, id));
   revalidatePath("/signals/archive");
