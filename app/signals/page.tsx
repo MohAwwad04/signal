@@ -238,8 +238,10 @@ export default async function SignalsPage({
                   const authorName = s.recommendedAuthorId ? authorMap.get(s.recommendedAuthorId) : null;
                   const contentLines = s.rawContent.split("\n").filter((l) => l.trim().length > 0);
                   const firstLine = contentLines[0] ?? s.rawContent;
-                  const restText = (contentLines.slice(1).join(" ").trim() || s.rawContent.slice(firstLine.length).trim()).replace(/\s+/g, " ");
-                  const preview = restText.length > 95 ? restText.slice(0, 95).trimEnd() + "…" : restText;
+                  const signalTitle = (s as any).title as string | null;
+                  const preview = signalTitle
+                    ? signalTitle.trim().split(/\s+/).slice(0, 5).join(" ") + (signalTitle.trim().split(/\s+/).length > 5 ? "…" : "")
+                    : taggedAngles.slice(0, 2).join(" · ");
                   const taggedAngles = (s.contentAngles as string[] | null) ?? [];
                   return (
                     <div
@@ -247,9 +249,6 @@ export default async function SignalsPage({
                       className="group flex items-start justify-between gap-4 rounded-2xl border border-border bg-card p-4 transition-all duration-200 hover:border-primary/30 hover:shadow-glow-sm hover:-translate-y-0.5"
                     >
                       <Link href={`/signals/${s.id}`} className="min-w-0 flex-1">
-                        {(s as any).title && (
-                          <p className="text-[11px] font-semibold text-blue-500/80 uppercase tracking-wide mb-0.5 truncate">{(s as any).title}</p>
-                        )}
                         <p className="line-clamp-2 text-sm font-medium leading-snug">{firstLine}</p>
                         <div className="mt-2.5 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
                           <Badge variant={s.status === "unused" ? "warning" : s.status === "used" ? "success" : "secondary"}>
