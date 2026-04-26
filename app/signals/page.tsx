@@ -236,7 +236,10 @@ export default async function SignalsPage({
               <div className="grid gap-2">
                 {group.signals.map((s) => {
                   const authorName = s.recommendedAuthorId ? authorMap.get(s.recommendedAuthorId) : null;
-                  const firstLine = s.rawContent.split("\n").find((l) => l.trim()) ?? s.rawContent;
+                  const contentLines = s.rawContent.split("\n").filter((l) => l.trim().length > 0);
+                  const firstLine = contentLines[0] ?? s.rawContent;
+                  const previewRaw = contentLines.slice(1).find((l) => l.trim().length > 20) ?? "";
+                  const preview = previewRaw.length > 95 ? previewRaw.slice(0, 95) + "…" : previewRaw;
                   const taggedAngles = (s.contentAngles as string[] | null) ?? [];
                   return (
                     <div
@@ -266,6 +269,12 @@ export default async function SignalsPage({
                           {((s as any).hashtags as string[] | null)?.slice(0, 3).map((h: string) => (
                             <span key={h} className="text-muted-foreground/60">#{h}</span>
                           ))}
+                          {preview && (
+                            <>
+                              <span className="text-muted-foreground/40">·</span>
+                              <span className="italic text-muted-foreground/50 truncate max-w-[220px]">{preview}</span>
+                            </>
+                          )}
                           <span className="text-muted-foreground/40">·</span>
                           <span>{timeAgo(s.createdAt)}</span>
                         </div>
