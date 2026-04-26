@@ -78,10 +78,7 @@ export async function extractSignalsAction( // transcription vaildation + fetch 
       transcriptId: transcriptRow.id,
     };
   });
-  const deduped = await deduplicateAgainstExisting(rows);
-  console.log(`[extract] After dedup: ${deduped.length}/${rows.length} signal(s) remain`);
-  if (!deduped.length) return { inserted: 0, signals: [], reason: "All signals matched existing ones (duplicates)" };
-  const inserted = await db.insert(schema.signals).values(deduped).returning();
+  const inserted = await db.insert(schema.signals).values(rows).returning();
   const kept = await scoreSignalsOrDelete(inserted.map((r) => r.id));
   console.log(`[extract] After scoring: ${kept.length}/${inserted.length} signal(s) kept`);
   revalidatePath("/signals");
