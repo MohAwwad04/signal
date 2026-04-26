@@ -246,14 +246,10 @@ export default async function SignalsPage({
                   const taggedAngles = (s.contentAngles as string[] | null) ?? [];
                   const hashtags = ((s as any).hashtags as string[] | null) ?? [];
                   const signalTitle = (s as any).title as string | null;
-                  const previewWords = hashtags.length > 0
-                    ? hashtags.slice(0, 4).join(", ")
-                    : taggedAngles.length > 0
-                    ? taggedAngles.slice(0, 3).join(", ")
-                    : signalTitle
-                    ? signalTitle.trim().split(/\s+/).slice(0, 4).join(" ")
-                    : "";
-                  const preview = previewWords;
+                  const previewTags = hashtags.slice(0, 4);
+                  const previewTitle = !previewTags.length && signalTitle
+                    ? signalTitle.trim().split(/\s+/).slice(0, 5).join(" ")
+                    : null;
                   return (
                     <div
                       key={s.id}
@@ -276,10 +272,20 @@ export default async function SignalsPage({
                               {tag}
                             </span>
                           ))}
-                          {preview && (
+                          {previewTags.length > 0 && (
                             <>
                               <span className="text-muted-foreground/40">·</span>
-                              <span className="italic text-muted-foreground/50 truncate max-w-[220px]">{preview}</span>
+                              {previewTags.map((tag) => (
+                                <span key={tag} className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground/70">
+                                  #{tag}
+                                </span>
+                              ))}
+                            </>
+                          )}
+                          {previewTitle && (
+                            <>
+                              <span className="text-muted-foreground/40">·</span>
+                              <span className="italic text-muted-foreground/50 truncate max-w-[220px]">{previewTitle}</span>
                             </>
                           )}
                           <span className="text-muted-foreground/40">·</span>
