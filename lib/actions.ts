@@ -17,7 +17,7 @@ import {
   reformatPostWithFramework,
   analyzeLinkedinPageContent,
 } from "@/lib/claude";
-import { ensureTranscript, scoreSignalsOrDelete } from "@/lib/signals-helpers";
+import { ensureTranscript, scoreSignalsOrDelete, deduplicateAgainstExisting } from "@/lib/signals-helpers";
 import { getVisibleAuthorIds } from "@/lib/session";
 
 /* ========== SIGNALS ========== */
@@ -77,7 +77,9 @@ export async function extractSignalsAction( // transcription vaildation + fetch 
       transcriptId: transcriptRow.id,
     };
   });
-  const inserted = await db.insert(schema.signals).values(rows).returning();
+  const deduped = await deduplicateAgainstExisting(rows);
+  if (!deduped.length) return { inserted: 0, signals: [] };
+  const inserted = await db.insert(schema.signals).values(deduped).returning();
   const kept = await scoreSignalsOrDelete(inserted.map((r) => r.id));
   revalidatePath("/signals");
   revalidatePath("/");
@@ -491,18 +493,10 @@ export async function createManualSignalAction(input: { title?: string; content:
     content: input.content,
     source: "manual_entry",
   });
-  const [row] = await db
-    .insert(schema.signals)
-    .values({
-      rawContent: input.content,
-      contentType: "post",
-      speaker: null,
-      title: input.title ?? null,
-      hashtags: input.hashtags ?? [],
-      source: "manual",
-      transcriptId: transcriptRow.id,
-    })
-    .returning();
+  const signalRow = { rawContent: input.content, contentType: "post" as const, speaker: null as string | null, title: input.title ?? null, hashtags: input.hashtags ?? [], source: "manual" as const, transcriptId: transcriptRow.id };
+  const deduped = await deduplicateAgainstExisting([signalRow]);
+  if (!deduped.length) throw new Error("A very similar signal already exists.");
+  const [row] = await db.insert(schema.signals).values(deduped[0]).returning();
   const kept = await scoreSignalsOrDelete([row.id]);
   if (kept.length === 0) {
     throw new Error("Failed to score the signal — please try again.");

@@ -3,7 +3,7 @@ import { db, schema } from "@/lib/db";
 import { isNotNull, eq, inArray, and } from "drizzle-orm";
 import { getValidGoogleToken, fetchGoogleMeetTranscripts } from "@/lib/google";
 import { generatePostsFromTranscript } from "@/lib/claude";
-import { scoreSignalsOrDelete } from "@/lib/signals-helpers";
+import { scoreSignalsOrDelete, deduplicateAgainstExisting } from "@/lib/signals-helpers";
 import { revalidatePath } from "next/cache";
 
 export const maxDuration = 300;
@@ -95,7 +95,9 @@ export async function GET(req: NextRequest) {
             };
           });
 
-          const inserted = await db.insert(schema.signals).values(rows).returning();
+          const deduped = await deduplicateAgainstExisting(rows);
+          if (!deduped.length) continue;
+          const inserted = await db.insert(schema.signals).values(deduped).returning();
           const kept = await scoreSignalsOrDelete(inserted.map((r) => r.id));
           synced += kept.length;
         } catch {

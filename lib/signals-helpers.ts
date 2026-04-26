@@ -2,6 +2,34 @@ import { db, schema } from "./db";
 import { eq, inArray, and, isNull, or, sql } from "drizzle-orm";
 import { scorePost } from "./claude";
 
+function jaccardSimilarity(a: string, b: string): number {
+  const words = (s: string) => new Set(s.toLowerCase().split(/\s+/).filter((w) => w.length > 3));
+  const setA = words(a);
+  const setB = words(b);
+  let inter = 0;
+  for (const w of setA) if (setB.has(w)) inter++;
+  const union = setA.size + setB.size - inter;
+  return union === 0 ? 0 : inter / union;
+}
+
+/**
+ * Filters out any candidate rows whose rawContent is too similar (Jaccard ≥ 0.45)
+ * to a signal already in the database. Fetches up to 2000 existing signals to compare.
+ */
+export async function deduplicateAgainstExisting<T extends { rawContent: string }>(
+  rows: T[],
+): Promise<T[]> {
+  if (!rows.length) return [];
+  const existing = await db
+    .select({ rawContent: schema.signals.rawContent })
+    .from(schema.signals)
+    .limit(2000);
+  if (!existing.length) return rows;
+  return rows.filter(
+    (row) => !existing.some((e) => jaccardSimilarity(row.rawContent, e.rawContent) >= 0.45),
+  );
+}
+
 /**
  * Find an existing transcript by sourceMeetingId, or insert a new one.
  * Every signal must point at a transcript row — there is no "transcript-less" signal.

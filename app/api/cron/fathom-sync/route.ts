@@ -3,7 +3,7 @@ import { db, schema } from "@/lib/db";
 import { isNotNull, eq, inArray, and } from "drizzle-orm";
 import { getValidFathomToken, fetchFathomMeetings } from "@/lib/fathom";
 import { generatePostsFromTranscript } from "@/lib/claude";
-import { ensureTranscript, scoreSignalsOrDelete } from "@/lib/signals-helpers";
+import { ensureTranscript, scoreSignalsOrDelete, deduplicateAgainstExisting } from "@/lib/signals-helpers";
 
 export const maxDuration = 300; // 5 min for Vercel Pro
 
@@ -85,7 +85,9 @@ export async function GET(req: NextRequest) {
               transcriptId: transcriptRow.id,
             };
           });
-          const inserted = await db.insert(schema.signals).values(rows).returning();
+          const deduped = await deduplicateAgainstExisting(rows);
+          if (!deduped.length) return 0;
+          const inserted = await db.insert(schema.signals).values(deduped).returning();
           const kept = await scoreSignalsOrDelete(inserted.map((r) => r.id));
           return kept.length;
         })
