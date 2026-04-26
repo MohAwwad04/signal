@@ -5,8 +5,8 @@
  *
  * Run: npx tsx scripts/seed-demo.ts
  *
- * NOTE: Superadmins are stored as role='admin' in the DB.
- *       For true superadmin access, add their emails to the ALLOWED_EMAILS env var.
+ * NOTE: Superadmins are stored as role='superadmin' in the DB and get full
+ *       superadmin access without needing the ALLOWED_EMAILS env var.
  */
 
 import { db, schema } from "../lib/db";
@@ -485,7 +485,7 @@ async function main() {
     .values(
       SUPERADMINS.map((sa) => ({
         email: sa.email,
-        role: "admin" as const,
+        role: "superadmin" as const,
         passwordHash: hashPassword(sa.password),
         active: true,
       }))
@@ -500,9 +500,8 @@ async function main() {
     "  SIGNAL — Demo Credentials",
     "=".repeat(60),
     "",
-    "NOTE: Superadmins are stored as role=admin in the DB.",
-    "      Add their emails to ALLOWED_EMAILS env var for",
-    "      full superadmin access.",
+    "NOTE: Superadmins are stored as role=superadmin in the DB.",
+    "      No env var configuration needed — they have full access.",
     "",
     "─── SUPERADMINS ───────────────────────────────────────",
     ...SUPERADMINS.map((sa) => `  ${sa.email.padEnd(36)} ${sa.password}`),

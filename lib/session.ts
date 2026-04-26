@@ -74,12 +74,13 @@ export const getCurrentUser = cache(async (): Promise<SessionUser | null> => {
 
   if (!user) return null;
 
-  const role = user.role as "admin" | "user";
+  const dbRole = user.role as "superadmin" | "admin" | "user";
+  const isSuperAdmin = dbRole === "superadmin";
   return {
     email: user.email,
-    role,
+    role: isSuperAdmin ? "superadmin" : dbRole,
     authorId: user.authorId ?? null,
-    isSuperAdmin: false,
-    isAdmin: role === "admin",
+    isSuperAdmin,
+    isAdmin: isSuperAdmin || dbRole === "admin",
   };
 });
