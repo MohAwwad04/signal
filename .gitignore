@@ -9,3 +9,4 @@ node_modules
 out
 tsconfig.tsbuildinfo
 .env*.local
+.claude/
