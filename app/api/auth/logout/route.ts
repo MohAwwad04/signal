@@ -7,7 +7,7 @@ async function handleLogout(req: NextRequest) {
   if (sessionToken) {
     await db.delete(schema.sessions).where(eq(schema.sessions.token, sessionToken)).catch(() => {});
   }
-  const res = NextResponse.redirect(new URL("/login", process.env.FRONTEND_URL ?? "http://localhost:3000"));
+  const res = NextResponse.redirect(new URL("/home", process.env.FRONTEND_URL ?? "http://localhost:3000"));
   const opts = { path: "/", maxAge: 0 };
   res.cookies.set("signal_auth", "", opts);
   res.cookies.set("signal_email", "", opts);
