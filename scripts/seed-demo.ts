@@ -33,7 +33,7 @@ type AdminDef = {
   voiceProfile: string;
   styleNotes: string;
   contentAngles: string[];
-  users: { email: string; password: string; name: string; role: string; bio: string; contentAngles: string[] }[];
+  users: { email: string; password: string; name: string; role: string; bio: string; contentAngles: string[]; voiceProfile?: string; styleNotes?: string }[];
 };
 
 const TEAM: AdminDef[] = [
@@ -48,7 +48,7 @@ const TEAM: AdminDef[] = [
     styleNotes: "Confident, direct, slightly provocative. Reads like a founder talking to a peer, not an audience.",
     contentAngles: ["Founder Lessons", "Leadership Development", "Team Building", "Hiring & Culture"],
     users: [
-      { email: "alice.morgan@signal.app",   password: "Pass@001", name: "Alice Morgan",   role: "VP Engineering",   bio: "Leads a 40-person engineering org. Writes about technical leadership and hiring.",    contentAngles: ["Engineering Culture", "Hiring & Culture", "Team Building"] },
+      { email: "alice.morgan@signal.app",   password: "Pass@001", name: "Alice Morgan",   role: "VP Engineering",   bio: "Leads a 40-person engineering org. Writes about technical leadership and hiring.",    contentAngles: ["Engineering Culture", "Hiring & Culture", "Team Building", "Leadership Development"], voiceProfile: "- Opens with a direct personal question or relatable scenario — never a generic claim\n- Uses 'I' throughout — personal accountability, not institutional voice\n- Pairs vulnerability with confidence: admits the hard thing, then names what changed\n- Grounds every point in a specific experience, metric, or moment — no abstractions\n- Alternates short punchy sentences with longer reflective ones for rhythm\n- Ends with an open invitation or question — never a hard CTA\n- Uses purposeful emojis sparingly, never decoratively\n- Frames work as meaning, not just output", styleNotes: "Authentic and emotionally honest — never purely analytical. Balances personal story with concrete engineering insight. Entrepreneurial confidence without arrogance. Shares the experience and lets the reader draw their own conclusion — never preachy." },
       { email: "brian.torres@signal.app",   password: "Pass@002", name: "Brian Torres",   role: "Head of Design",   bio: "Product designer turned design lead. Writes about design systems and craft.",          contentAngles: ["Product Leadership", "Team Building"] },
       { email: "claire.wu@signal.app",      password: "Pass@003", name: "Claire Wu",      role: "CFO",              bio: "Operator and finance lead. Writes about unit economics and startup discipline.",       contentAngles: ["Revenue Growth", "Data-Driven Decisions", "Startup Operations"] },
       { email: "david.osei@signal.app",     password: "Pass@004", name: "David Osei",     role: "COO",              bio: "Scaled operations from 5 to 150 people. Writes about execution and process.",         contentAngles: ["Startup Operations", "Team Building", "Leadership Development"] },
@@ -556,6 +556,8 @@ async function main() {
           role: user.role,
           bio: user.bio,
           contentAngles: user.contentAngles,
+          ...(user.voiceProfile ? { voiceProfile: user.voiceProfile } : {}),
+          ...(user.styleNotes ? { styleNotes: user.styleNotes } : {}),
           active: true,
         })
         .returning();
