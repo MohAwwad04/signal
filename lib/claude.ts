@@ -721,37 +721,62 @@ export async function analyzeLinkedinPageContent(
   scrapedText: string,
   availableFrameworks: { name: string; description: string }[]
 ): Promise<LinkedinProfileAnalysis> {
-  const frameworkList = availableFrameworks.map((f) => `- ${f.name}: ${f.description}`).join("\n");
+  const frameworkList = availableFrameworks
+    .map((f) => `• ${f.name}: ${f.description}`)
+    .join("\n");
 
   const raw = await textCall({
-    maxTokens: 1500,
-    temperature: 0.3,
-    system: `${GLOBAL_RULES}
+    maxTokens: 2000,
+    temperature: 0.2,
+    system: `You are a writing coach and ghostwriter analyst. Your job is to read LinkedIn posts written by a specific author and extract a precise, actionable writing profile that an AI can use to replicate their voice.
 
-You are analyzing scraped content from a LinkedIn profile page to build a writing profile for an AI ghostwriter.
-The input is raw text extracted from the page — it may include navigation, UI elements, and other noise alongside the actual posts and profile info. Focus only on the meaningful content: posts, headlines, bio, and descriptions of their work.`,
-    user: `Analyze this LinkedIn page content and return a JSON writing profile.
+You receive raw scraped text from a LinkedIn profile and recent activity page. The text contains noise: UI labels, reaction counts, timestamps, navigation text. Ignore all of that. Focus exclusively on the actual post bodies — the paragraphs of written content the author published.
 
-AVAILABLE FRAMEWORKS (match the author's natural style to one or more):
+Return ONLY valid JSON. No explanation, no markdown, no preamble.`,
+    user: `Read every post in the scraped LinkedIn content below and build a writing profile for this author.
+
+━━━ AVAILABLE FRAMEWORKS ━━━
+Match the author's natural post structure to one or more of these:
 ${frameworkList}
 
-SCRAPED PAGE CONTENT:
-${scrapedText.slice(0, 30000)}
+━━━ SCRAPED LINKEDIN CONTENT ━━━
+${scrapedText.slice(0, 32000)}
 
-Return ONLY valid JSON in this exact shape:
+━━━ OUTPUT ━━━
+Return this exact JSON shape and nothing else:
 {
-  "contentAngles": ["topic1", "topic2", ...],
-  "preferredFrameworkNames": ["Framework Name 1", ...],
-  "voiceProfile": "5–10 bullet rules describing the author's writing patterns, tone, sentence length, structure. Concrete and actionable.",
-  "styleNotes": "1–2 sentence summary of the author's overall style and what makes it distinctive."
+  "contentAngles": ["angle1", "angle2", ...],
+  "preferredFrameworkNames": ["Framework Name"],
+  "voiceProfile": "bullet rules here",
+  "styleNotes": "summary sentence here"
 }
 
-Rules:
-- contentAngles: 3–8 specific topics this author writes about (from their posts and profile — e.g. "B2B sales strategy", "founder lessons", "hiring culture")
-- preferredFrameworkNames: 1–3 framework names from the list above that best match how this author naturally structures posts
-- voiceProfile: bullet-style rules, under 200 words total, each rule concrete and directly applicable
-- styleNotes: plain sentence(s), no bullet points
-- If no posts are visible, derive topics from the profile bio, headline, and experience sections`,
+Field instructions:
+
+contentAngles — 3 to 8 strings.
+Each must be a specific, narrow topic this author ACTUALLY posts about.
+Bad: "leadership", "business", "marketing"
+Good: "scaling a bootstrapped SaaS", "cold outreach for B2B founders", "remote team culture"
+Derive only from the posts themselves, not from job titles or buzzwords.
+
+preferredFrameworkNames — 1 to 3 names, chosen from the AVAILABLE FRAMEWORKS list above.
+Read how the author structures their posts: where is the hook, how do they build tension, how do they close?
+Match that pattern to the closest framework(s). Use the exact name from the list.
+
+voiceProfile — a newline-separated list of 6 to 10 bullet rules.
+Each rule must be specific enough that a writer could apply it immediately.
+Cover: hook style, sentence length, paragraph length, use of numbers/stats, rhetorical questions, personal pronouns, storytelling vs. advice ratio, how they open, how they close, any signature phrases or patterns.
+Examples of good rules:
+• Opens with a one-sentence hook that states an outcome or a counterintuitive claim
+• Uses short paragraphs — 1 to 2 sentences each, never more than 3
+• Includes at least one specific number or percentage per post
+• Ends with a direct question addressed to the reader
+• Uses "I" not "we" — first-person singular throughout
+• No bullet lists in posts — everything is flowing prose
+Under 280 words total.
+
+styleNotes — exactly 1 to 2 sentences.
+Describe what makes this author's writing recognisable and distinctive in a way that separates them from generic LinkedIn content.`,
   });
 
   let parsed: Partial<LinkedinProfileAnalysis> = {};

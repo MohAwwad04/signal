@@ -660,15 +660,19 @@ export async function scrapeLinkedinProfileAction(authorId: number): Promise<{ o
 
     const vanity = author.linkedinUrl.match(/linkedin\.com\/in\/([^/?#]+)/i)?.[1] ?? null;
 
-    // Scrape profile + recent posts via Jina Reader
+    // Fetch profile page + recent activity page via Jina Reader
     const [profileRaw, postsRaw] = await Promise.all([
       jinaGet(author.linkedinUrl),
-      vanity ? jinaGet(`https://www.linkedin.com/in/${vanity}/recent-activity/shares/`) : Promise.resolve(null),
+      vanity
+        ? jinaGet(`https://www.linkedin.com/in/${vanity}/recent-activity/shares/`)
+        : Promise.resolve(null),
     ]);
 
-    // Filter out auth wall pages
     const isAuthWall = (t: string) =>
-      t.includes("Sign in to LinkedIn") || t.includes("authwall") || t.includes("Join LinkedIn");
+      t.includes("Sign in to LinkedIn") ||
+      t.includes("authwall") ||
+      t.includes("Join LinkedIn") ||
+      t.includes("Be seen by employers");
 
     const profileText = profileRaw && !isAuthWall(profileRaw) ? profileRaw : null;
     const postsText   = postsRaw   && !isAuthWall(postsRaw)   ? postsRaw   : null;
@@ -677,18 +681,16 @@ export async function scrapeLinkedinProfileAction(authorId: number): Promise<{ o
     if (!fullText) {
       return {
         ok: false,
-        message: "Could not read this LinkedIn profile — it may be private or require sign-in. Make sure the profile URL is correct and the account is public.",
+        message: "Could not read this LinkedIn profile — it may be private or require sign-in. Ensure the profile URL is correct and the account is set to public.",
       };
     }
 
-    // Analyse writing style first; signals are best-effort
     const analysis = await analyzeLinkedinPageContent(fullText, allFrameworks);
 
-    const hasAnalysis = analysis.voiceProfile || analysis.contentAngles.length > 0;
-    if (!hasAnalysis) {
+    if (!analysis.voiceProfile && analysis.contentAngles.length === 0) {
       return {
         ok: false,
-        message: `LinkedIn profile was read (${fullText.length} chars) but not enough post content was found to build a voice profile. Try again once the profile has public posts visible.`,
+        message: `Profile page was fetched (${fullText.length} chars) but contained no readable posts. Make sure the LinkedIn profile has public posts.`,
       };
     }
 
@@ -699,72 +701,23 @@ export async function scrapeLinkedinProfileAction(authorId: number): Promise<{ o
     await db.update(schema.authors).set({
       voiceProfile: analysis.voiceProfile || null,
       styleNotes: analysis.styleNotes || null,
-      contentAngles: analysis.contentAngles.length ? analysis.contentAngles : (author.contentAngles as string[] | null) ?? [],
+      contentAngles: analysis.contentAngles.length
+        ? analysis.contentAngles
+        : ((author.contentAngles as string[] | null) ?? []),
       ...(preferredFrameworkIds.length > 0 ? { preferredFrameworks: preferredFrameworkIds } : {}),
     }).where(eq(schema.authors.id, authorId));
 
-    // Extract signals from the posts — best-effort, never block the success response
-    let signalsCreated = 0;
-    try {
-      const authorContext = [{
-        role: author.role ?? "",
-        contentAngles: analysis.contentAngles.length
-          ? analysis.contentAngles
-          : (author.contentAngles as string[] | null) ?? [],
-        preferredFrameworkNames: analysis.preferredFrameworkNames,
-        voiceProfile: analysis.voiceProfile || author.voiceProfile || undefined,
-        performanceLearningHints: author.performanceLearningHints ?? undefined,
-      }];
-
-      const generated = await generatePostsFromTranscript(fullText, authorContext, allFrameworks);
-
-      if (generated.length > 0) {
-        const transcriptRow = await ensureTranscript({
-          title: `LinkedIn: ${author.name}`,
-          content: fullText,
-          source: "manual",
-          sourceMeetingDate: new Date(),
-        });
-
-        const candidates = generated.map((s) => ({
-          rawContent: s.rawContent,
-          title: s.title ?? null,
-          contentType: "post" as const,
-          speaker: null as string | null,
-          hashtags: s.hashtags ?? [],
-          contentAngles: s.contentAngle ? [s.contentAngle] : [] as string[],
-          recommendedAuthorId: authorId,
-          bestFrameworkId: s.frameworkName
-            ? (allFrameworks.find((f) => f.name.toLowerCase() === s.frameworkName!.toLowerCase())?.id ?? null)
-            : null,
-          source: "manual" as const,
-          sourceMeetingTitle: `LinkedIn: ${author.name}`,
-          sourceMeetingDate: new Date(),
-          transcriptId: transcriptRow.id,
-        }));
-
-        const deduped = await deduplicateAgainstExisting(candidates);
-        if (deduped.length > 0) {
-          const inserted = await db.insert(schema.signals).values(deduped).returning({ id: schema.signals.id });
-          await scoreSignalsOrDelete(inserted.map((r) => r.id));
-          signalsCreated = inserted.length;
-        }
-      }
-    } catch (e) {
-      console.error("[scrapeLinkedin] signal extraction failed (non-fatal):", e);
-    }
-
     revalidatePath(`/authors/${authorId}`);
     revalidatePath("/settings");
-    revalidatePath("/signals");
 
-    const msg = signalsCreated > 0
-      ? `Profile analysed — voice updated, ${signalsCreated} signal(s) created from your posts.`
-      : "LinkedIn profile analysed — voice and content angles updated.";
-    return { ok: true, message: msg };
+    const parts: string[] = ["LinkedIn posts analysed and profile updated."];
+    if (analysis.contentAngles.length) parts.push(`${analysis.contentAngles.length} content angle(s) set.`);
+    if (preferredFrameworkIds.length)  parts.push(`${preferredFrameworkIds.length} preferred framework(s) matched.`);
+    if (analysis.voiceProfile)         parts.push("Voice profile built.");
+    return { ok: true, message: parts.join(" ") };
   } catch (e: any) {
     console.error("[scrapeLinkedin]", e);
-    return { ok: false, message: "Failed to read LinkedIn profile." };
+    return { ok: false, message: `Failed to read LinkedIn profile: ${e?.message ?? "unknown error"}` };
   }
 }
 
