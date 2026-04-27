@@ -684,6 +684,14 @@ export async function scrapeLinkedinProfileAction(authorId: number): Promise<{ o
     // Analyse writing style first; signals are best-effort
     const analysis = await analyzeLinkedinPageContent(fullText, allFrameworks);
 
+    const hasAnalysis = analysis.voiceProfile || analysis.contentAngles.length > 0;
+    if (!hasAnalysis) {
+      return {
+        ok: false,
+        message: `LinkedIn profile was read (${fullText.length} chars) but not enough post content was found to build a voice profile. Try again once the profile has public posts visible.`,
+      };
+    }
+
     const preferredFrameworkIds = analysis.preferredFrameworkNames
       .map((name) => allFrameworks.find((f) => f.name.toLowerCase() === name.toLowerCase())?.id)
       .filter((id): id is number => id !== undefined);

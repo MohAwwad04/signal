@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { updateAuthorContentAnglesAction, addContentAngleToAuthorAction, createContentAngleAction } from "@/lib/actions";
@@ -18,8 +18,8 @@ export function ContentAngles({
   initialAngles: string[];
   allGlobalAngles: ContentAngle[];
 }) {
-  const defaults = initialAngles.length ? initialAngles : [];
-  const [angles, setAngles] = useState<string[]>(defaults);
+  const [angles, setAngles] = useState<string[]>(initialAngles);
+  useEffect(() => { setAngles(initialAngles); }, [initialAngles.join(",")]);
   const [newAngle, setNewAngle] = useState("");
   const [saving, setSaving] = useState(false);
 

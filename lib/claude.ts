@@ -754,7 +754,8 @@ Rules:
 - If no posts are visible, derive topics from the profile bio, headline, and experience sections`,
   });
 
-  const parsed = extractJson<LinkedinProfileAnalysis>(raw);
+  let parsed: Partial<LinkedinProfileAnalysis> = {};
+  try { parsed = extractJson<LinkedinProfileAnalysis>(raw); } catch { /* keep empty */ }
   return {
     contentAngles: Array.isArray(parsed.contentAngles) ? parsed.contentAngles : [],
     preferredFrameworkNames: Array.isArray(parsed.preferredFrameworkNames) ? parsed.preferredFrameworkNames : [],
