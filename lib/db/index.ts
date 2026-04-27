@@ -33,5 +33,14 @@ function createDb() {
   return drizzlePg(pool, { schema });
 }
 
-export const db = (global.__db ?? (global.__db = createDb())) as ReturnType<typeof createDb>;
+function getDb() {
+  if (!global.__db) global.__db = createDb();
+  return global.__db as ReturnType<typeof createDb>;
+}
+
+export const db = new Proxy({} as ReturnType<typeof createDb>, {
+  get(_target, prop) {
+    return (getDb() as any)[prop];
+  },
+});
 export { schema };
