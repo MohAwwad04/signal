@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
   const deleted = await db
     .delete(schema.signals)
     .where(and(eq(schema.signals.status, "archived"), lt(schema.signals.archivedAt, cutoff)))
-    .returning({ id: schema.signals.id });
+    .returning();
 
   return NextResponse.json({ ok: true, deleted: deleted.length });
 }

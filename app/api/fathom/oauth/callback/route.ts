@@ -79,7 +79,7 @@ export async function GET(req: NextRequest) {
         fathomConnectedAt: new Date(),
       })
       .where(eq(schema.authors.id, authorId))
-      .returning({ id: schema.authors.id });
+      .returning();
   } catch (e) {
     console.error("[fathom-callback] db update FAILED:", e);
     return NextResponse.redirect(

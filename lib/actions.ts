@@ -3,7 +3,7 @@
 import { db, schema } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { desc, eq, and, sql, lt, inArray } from "drizzle-orm";
-import { extractLinkedinPostUrn, jinaGet } from "@/lib/linkedin";
+import { extractLinkedinPostUrn, jinaGet, fetchLinkedinAuthoredPosts, getValidLinkedinToken } from "@/lib/linkedin";
 import { sendInviteEmail } from "@/lib/email";
 import { randomBytes } from "crypto";
 import {
@@ -660,24 +660,38 @@ export async function scrapeLinkedinProfileAction(authorId: number): Promise<{ o
 
     const vanity = author.linkedinUrl.match(/linkedin\.com\/in\/([^/?#]+)/i)?.[1] ?? null;
 
-    // Fetch profile page + recent activity page via Jina Reader
-    const [profileRaw, postsRaw] = await Promise.all([
-      jinaGet(author.linkedinUrl),
-      vanity
-        ? jinaGet(`https://www.linkedin.com/in/${vanity}/recent-activity/shares/`)
-        : Promise.resolve(null),
-    ]);
-
     const isAuthWall = (t: string) =>
       t.includes("Sign in to LinkedIn") ||
       t.includes("authwall") ||
       t.includes("Join LinkedIn") ||
       t.includes("Be seen by employers");
 
+    // Try LinkedIn API first (reliable when connected), then fall back to Jina scraping
+    let apiPostsText: string | null = null;
+    if (author.linkedinAccessToken && author.linkedinMemberId) {
+      try {
+        const token = await getValidLinkedinToken(authorId);
+        const posts = await fetchLinkedinAuthoredPosts(token, author.linkedinMemberId);
+        if (posts && posts.length > 0) {
+          apiPostsText = posts.join("\n\n---\n\n");
+        }
+      } catch {
+        // token refresh failed or API unavailable — fall through to Jina
+      }
+    }
+
+    // Fetch profile page + recent activity page via Jina Reader
+    const [profileRaw, postsRaw] = await Promise.all([
+      jinaGet(author.linkedinUrl),
+      vanity && !apiPostsText
+        ? jinaGet(`https://www.linkedin.com/in/${vanity}/recent-activity/shares/`)
+        : Promise.resolve(null),
+    ]);
+
     const profileText = profileRaw && !isAuthWall(profileRaw) ? profileRaw : null;
     const postsText   = postsRaw   && !isAuthWall(postsRaw)   ? postsRaw   : null;
 
-    const fullText = [profileText, postsText].filter(Boolean).join("\n\n---\n\n");
+    const fullText = [profileText, apiPostsText ?? postsText].filter(Boolean).join("\n\n---\n\n");
     if (!fullText) {
       return {
         ok: false,

@@ -25,7 +25,7 @@ export default async function ContentAnglesPage() {
       if (existing[0]) {
         angleId = existing[0].id;
       } else {
-        const [created] = await db.insert(schema.contentAngles).values({ name }).returning({ id: schema.contentAngles.id });
+        const [created] = await db.insert(schema.contentAngles).values({ name }).returning();
         angleId = created.id;
       }
       // Ensure each author that has this name in their jsonb is linked in the join table

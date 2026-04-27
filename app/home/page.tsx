@@ -147,7 +147,7 @@ export default async function HomePage() {
             {/* Connector + AI badge (desktop) */}
             <div className="hidden md:flex flex-col items-center justify-center gap-2 pt-10 px-2">
               <div className="h-px w-full bg-gradient-to-r from-border via-blue-500/40 to-border" />
-              <div className="flex items-center justify-center gap-2 -mt-3">
+              <div className="flex items-center justify-center gap-2 mt-2">
                 <div className="flex items-center gap-1.5 rounded-full border border-blue-500/30 bg-blue-500/10 px-3 py-1">
                   <Sparkles className="h-3 w-3 text-blue-400" />
                   <span className="text-[10px] font-semibold text-blue-400">Claude AI</span>

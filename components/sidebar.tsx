@@ -21,7 +21,7 @@ function useUserIdentity(): Identity {
 }
 
 const ADMIN_ITEMS = [
-  { href: "/",           label: "Dashboard",  icon: LayoutDashboard },
+  { href: "/dashboard",  label: "Dashboard",  icon: LayoutDashboard },
   { href: "/signals",    label: "Signals",    icon: Radio },
   { href: "/drafts",     label: "Drafts",     icon: FileEdit },
   { href: "/authors",    label: "Authors",    icon: Users },
@@ -31,7 +31,7 @@ const ADMIN_ITEMS = [
 ];
 
 const USER_ITEMS = [
-  { href: "/",         label: "Dashboard", icon: LayoutDashboard },
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/drafts",   label: "My posts",  icon: FileEdit },
   { href: "/settings", label: "Settings",  icon: Settings },
 ];
