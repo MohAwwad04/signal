@@ -330,43 +330,6 @@ export default async function HomePage() {
               What's happening right now
             </h2>
 
-            {/* Stats row */}
-            <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
-              {[
-                { label: "Unused signals", value: stats.unused,   href: "/signals",   color: "blue",   icon: <Radio className="h-3.5 w-3.5" /> },
-                { label: "In review",      value: stats.inReview, href: "/drafts",    color: "amber",  icon: <FileEdit className="h-3.5 w-3.5" /> },
-                { label: "Published",      value: stats.published,href: "/analytics", color: "emerald",icon: <Send className="h-3.5 w-3.5" /> },
-                { label: "Authors",        value: stats.authors,  href: "/authors",   color: "cyan",   icon: <Users className="h-3.5 w-3.5" /> },
-              ].map((s) => (
-                <Link
-                  key={s.label}
-                  href={s.href}
-                  className={`group rounded-2xl border border-border bg-card p-4 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-glow-sm ${
-                    s.color === "blue" ? "hover:border-blue-400/30" :
-                    s.color === "amber" ? "hover:border-amber-400/30" :
-                    s.color === "emerald" ? "hover:border-emerald-400/30" :
-                    "hover:border-cyan-400/30"
-                  }`}
-                >
-                  <div className={`mb-2.5 inline-flex rounded-lg p-1.5 ${
-                    s.color === "blue" ? "bg-blue-500/10" :
-                    s.color === "amber" ? "bg-amber-500/10" :
-                    s.color === "emerald" ? "bg-emerald-500/10" :
-                    "bg-cyan-500/10"
-                  }`}>
-                    <span className={
-                      s.color === "blue" ? "text-blue-400" :
-                      s.color === "amber" ? "text-amber-400" :
-                      s.color === "emerald" ? "text-emerald-400" :
-                      "text-cyan-400"
-                    }>{s.icon}</span>
-                  </div>
-                  <div className="text-2xl font-bold tracking-tight">{s.value}</div>
-                  <div className="mt-0.5 text-xs text-muted-foreground">{s.label}</div>
-                </Link>
-              ))}
-            </div>
-
             {/* Recent posts */}
             {stats.recent.length > 0 && (
               <div>
