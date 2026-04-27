@@ -7,6 +7,9 @@ import { FathomCard } from "@/app/authors/[id]/fathom-card";
 import { LinkedInCard } from "@/app/authors/[id]/linkedin-card";
 import { GoogleDriveCard } from "@/app/authors/[id]/google-drive-card";
 import { LinkedinUrlEditor } from "@/app/authors/[id]/linkedin-url-editor";
+import { ContentAngles } from "@/app/authors/[id]/content-angles";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Settings } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -34,12 +37,18 @@ export default async function SettingsPage() {
     );
   }
 
-  const [author] = await db
-    .select()
-    .from(schema.authors)
-    .where(eq(schema.authors.id, session.authorId));
+  const [author, allGlobalAngles, allFrameworks] = await Promise.all([
+    db.select().from(schema.authors).where(eq(schema.authors.id, session.authorId)).then((r) => r[0]),
+    db.select({ id: schema.contentAngles.id, name: schema.contentAngles.name }).from(schema.contentAngles).orderBy(schema.contentAngles.name),
+    db.select({ id: schema.frameworks.id, name: schema.frameworks.name }).from(schema.frameworks),
+  ]);
 
   if (!author) notFound();
+
+  const preferredFrameworkIds = (author.preferredFrameworks as number[] | null) ?? [];
+  const preferredFrameworks = preferredFrameworkIds
+    .map((id) => allFrameworks.find((f) => f.id === id))
+    .filter((f): f is { id: number; name: string } => f !== undefined);
 
   return (
     <div className="mx-auto w-full max-w-2xl p-6 md:p-10">
@@ -55,7 +64,7 @@ export default async function SettingsPage() {
         </div>
       </header>
 
-      <div className="space-y-4">
+      <div className="space-y-4 mb-8">
         <Suspense>
           <FathomCard
             authorId={author.id}
@@ -84,6 +93,69 @@ export default async function SettingsPage() {
             isConnected={!!author.googleAccessToken}
           />
         </Suspense>
+      </div>
+
+      <div className="space-y-4">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Content angles</CardTitle>
+            <CardDescription>Topics you focus on. Used to guide post generation.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ContentAngles
+              authorId={author.id}
+              initialAngles={(author.contentAngles as string[] | null) ?? []}
+              allGlobalAngles={allGlobalAngles}
+            />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Preferred frameworks</CardTitle>
+            <CardDescription>Post structures that match your natural writing style.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {preferredFrameworks.length > 0 ? (
+              <div className="flex flex-wrap gap-2">
+                {preferredFrameworks.map((f) => (
+                  <Badge key={f.id} variant="secondary">{f.name}</Badge>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground italic">
+                No preferred frameworks yet. Run "Auto-fill from LinkedIn" to detect them automatically.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Voice profile</CardTitle>
+            <CardDescription>How the AI writes in your voice. Built from your edits and LinkedIn posts.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {author.voiceProfile ? (
+              <pre className="whitespace-pre-wrap text-sm text-muted-foreground leading-relaxed">{author.voiceProfile}</pre>
+            ) : (
+              <p className="text-sm text-muted-foreground italic">
+                No voice profile yet. Make a few edits or run "Auto-fill from LinkedIn" to build one.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+
+        {author.styleNotes && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Style notes</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground">{author.styleNotes}</p>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   );
