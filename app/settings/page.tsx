@@ -59,6 +59,10 @@ export default async function SettingsPage() {
         </div>
         <h1 className="text-3xl font-bold tracking-tight">{author.name}</h1>
         {author.bio && <p className="mt-1 text-sm text-muted-foreground">{author.bio}</p>}
+        {/* TEMP DEBUG — remove after diagnosis */}
+        <pre className="mt-2 text-[10px] bg-muted rounded p-2 overflow-auto">
+          {JSON.stringify({ authorId: author.id, angles: author.contentAngles, hasVoice: !!author.voiceProfile, hasStyle: !!author.styleNotes }, null, 2)}
+        </pre>
         <div className="mt-2">
           <LinkedinUrlEditor authorId={author.id} initialUrl={author.linkedinUrl ?? null} />
         </div>
