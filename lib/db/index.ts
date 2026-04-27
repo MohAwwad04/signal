@@ -40,7 +40,9 @@ function getDb() {
 
 export const db = new Proxy({} as ReturnType<typeof createDb>, {
   get(_target, prop) {
-    return (getDb() as any)[prop];
+    const instance = getDb() as any;
+    const val = instance[prop];
+    return typeof val === "function" ? val.bind(instance) : val;
   },
 });
 export { schema };
