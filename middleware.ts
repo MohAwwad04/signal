@@ -22,6 +22,10 @@ export function middleware(req: NextRequest) {
   if (cookie) return NextResponse.next();
 
   const url = req.nextUrl.clone();
+  if (pathname === "/") {
+    url.pathname = "/home";
+    return NextResponse.redirect(url);
+  }
   url.pathname = "/login";
   url.searchParams.set("next", pathname);
   return NextResponse.redirect(url);
