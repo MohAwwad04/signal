@@ -1,46 +1,8 @@
 import Link from "next/link";
-import { db, schema } from "@/lib/db";
-import { desc, sql, eq } from "drizzle-orm";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { timeAgo } from "@/lib/utils";
-import { ArrowUpRight, Radio, FileEdit, Send, Users, Zap, Sparkles, Brain, GitBranch, LogIn } from "lucide-react";
-
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
-
-async function loadStats() {
-  try {
-    const [signalsByStatus, postsByStatus, authorsCount, recent] = await Promise.all([
-      db.select({ status: schema.signals.status, count: sql<number>`count(*)::int` })
-        .from(schema.signals).groupBy(schema.signals.status),
-      db.select({ status: schema.posts.status, count: sql<number>`count(*)::int` })
-        .from(schema.posts).groupBy(schema.posts.status),
-      db.select({ count: sql<number>`count(*)::int` })
-        .from(schema.authors).where(eq(schema.authors.active, true)),
-      db.select({
-        id: schema.posts.id, content: schema.posts.content, status: schema.posts.status,
-        updatedAt: schema.posts.updatedAt, hookStrengthScore: schema.posts.hookStrengthScore,
-      }).from(schema.posts).orderBy(desc(schema.posts.updatedAt)).limit(4),
-    ]);
-    const byStatus = (rows: { status: string; count: number }[]) =>
-      Object.fromEntries(rows.map((r) => [r.status, r.count])) as Record<string, number>;
-    return {
-      unused: byStatus(signalsByStatus).unused ?? 0,
-      inReview: byStatus(postsByStatus).in_review ?? 0,
-      published: byStatus(postsByStatus).published ?? 0,
-      authors: authorsCount[0]?.count ?? 0,
-      recent,
-      dbOk: true as const,
-    };
-  } catch {
-    return { dbOk: false as const };
-  }
-}
+import { Radio, FileEdit, Zap, Sparkles, Brain, GitBranch, LogIn } from "lucide-react";
 
 export default async function HomePage() {
-  const stats = await loadStats();
-
   return (
     <div className="min-h-screen">
 
@@ -318,92 +280,7 @@ export default async function HomePage() {
         </div>
       </section>
 
-      {/* ── Live stats + recent posts ── */}
-      {stats.dbOk && (
-        <section className="px-6 pb-20 md:px-10">
-          <div className="mx-auto max-w-4xl">
-
-            <div className="mb-2 text-center">
-              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">Live workspace</span>
-            </div>
-            <h2 className="mb-8 text-center text-2xl font-bold tracking-tight">
-              What's happening right now
-            </h2>
-
-            {/* Recent posts */}
-            {stats.recent.length > 0 && (
-              <div>
-                <div className="mb-3 flex items-center justify-between">
-                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Recent posts</span>
-                  <Link href="/drafts" className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors">
-                    See all <ArrowUpRight className="h-3 w-3" />
-                  </Link>
-                </div>
-                <div className="grid gap-2 md:grid-cols-2">
-                  {stats.recent.map((p) => (
-                    <Link
-                      key={p.id}
-                      href={`/posts/${p.id}`}
-                      className="group flex items-start justify-between gap-3 rounded-2xl border border-border bg-card p-4 transition-all duration-200 hover:border-primary/30 hover:shadow-glow-sm hover:-translate-y-0.5"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <p className="line-clamp-2 text-xs leading-relaxed text-foreground/80">{p.content.slice(0, 160)}</p>
-                        <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground">
-                          <StatusBadge status={p.status} />
-                          <span className="text-muted-foreground/40">·</span>
-                          <span>{timeAgo(p.updatedAt)}</span>
-                          {p.hookStrengthScore != null && (
-                            <>
-                              <span className="text-muted-foreground/40">·</span>
-                              <span className="font-medium text-primary/70">Hook {p.hookStrengthScore}/100</span>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                      <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground/30 transition-all duration-200 group-hover:text-primary group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
-                    </Link>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {stats.recent.length === 0 && (
-              <div className="rounded-2xl border border-dashed border-border p-10 text-center">
-                <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-2xl bg-primary/10">
-                  <Radio className="h-4 w-4 text-primary" />
-                </div>
-                <p className="text-sm font-medium">No posts yet</p>
-                <p className="mt-1 text-xs text-muted-foreground">Start by pasting a meeting transcript to extract your first signal.</p>
-                <div className="mt-4">
-                  <Link href="/signals/new">
-                    <Button size="sm">Paste a transcript</Button>
-                  </Link>
-                </div>
-              </div>
-            )}
-          </div>
-        </section>
-      )}
     </div>
   );
 }
 
-function ArrowDown() {
-  return (
-    <svg width="16" height="20" viewBox="0 0 16 20" fill="none" className="text-muted-foreground/40">
-      <path d="M8 0v16M2 10l6 8 6-8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function StatusBadge({ status }: { status: string }) {
-  const map: Record<string, { variant: any; label: string }> = {
-    draft:     { variant: "secondary",   label: "Draft"     },
-    in_review: { variant: "warning",     label: "In review" },
-    approved:  { variant: "success",     label: "Approved"  },
-    rejected:  { variant: "destructive", label: "Rejected"  },
-    published: { variant: "default",     label: "Published" },
-  };
-  const m = map[status] ?? { variant: "secondary", label: status };
-  return <Badge variant={m.variant}>{m.label}</Badge>;
-}
