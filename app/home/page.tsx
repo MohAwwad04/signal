@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { Radio, FileEdit, Zap, Sparkles, Brain, GitBranch, LogIn } from "lucide-react";
+import { Radio, FileEdit, Send, Zap, Sparkles, Brain, GitBranch, LogIn } from "lucide-react";
 
 export default async function HomePage() {
   return (
