@@ -3,7 +3,7 @@
 import { db, schema } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { desc, eq, and, sql, lt, inArray } from "drizzle-orm";
-import { extractLinkedinPostUrn } from "@/lib/linkedin";
+import { extractLinkedinPostUrn, jinaGet } from "@/lib/linkedin";
 import { sendInviteEmail } from "@/lib/email";
 import { randomBytes } from "crypto";
 import {
@@ -651,27 +651,95 @@ export async function learnFromPerformanceAction(authorId: number): Promise<{ up
 
 export async function scrapeLinkedinProfileAction(authorId: number): Promise<{ ok: boolean; message: string }> {
   try {
-    const author = await db.select().from(schema.authors).where(eq(schema.authors.id, authorId)).then((r) => r[0]);
+    const [author, allFrameworks] = await Promise.all([
+      db.select().from(schema.authors).where(eq(schema.authors.id, authorId)).then((r) => r[0]),
+      db.select({ id: schema.frameworks.id, name: schema.frameworks.name, description: schema.frameworks.description }).from(schema.frameworks),
+    ]);
     if (!author) return { ok: false, message: "Author not found." };
     if (!author.linkedinUrl) return { ok: false, message: "No LinkedIn URL set for this author." };
 
-    const frameworks = await db.select({ name: schema.frameworks.name, description: schema.frameworks.description }).from(schema.frameworks);
+    const vanity = author.linkedinUrl.match(/linkedin\.com\/in\/([^/?#]+)/i)?.[1] ?? null;
 
-    const response = await fetch(author.linkedinUrl, { headers: { "User-Agent": "Mozilla/5.0" } });
-    const html = await response.text();
-    const text = html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").slice(0, 8000);
+    // Scrape profile page + recent posts page via Jina Reader
+    const [profileText, postsText] = await Promise.all([
+      jinaGet(author.linkedinUrl),
+      vanity ? jinaGet(`https://www.linkedin.com/in/${vanity}/recent-activity/shares/`) : Promise.resolve(null),
+    ]);
 
-    const result = await analyzeLinkedinPageContent(text, frameworks);
+    const fullText = [profileText, postsText].filter(Boolean).join("\n\n---\n\n");
+    if (!fullText) return { ok: false, message: "Could not read LinkedIn profile. Make sure the URL is correct and the profile is public." };
 
+    // Analyse writing style and extract signals in parallel
+    const authorContext = [{
+      role: author.role ?? "",
+      contentAngles: (author.contentAngles as string[] | null) ?? [],
+      preferredFrameworkNames: [] as string[],
+      voiceProfile: author.voiceProfile ?? undefined,
+      performanceLearningHints: author.performanceLearningHints ?? undefined,
+    }];
+
+    const [analysis, generated] = await Promise.all([
+      analyzeLinkedinPageContent(fullText, allFrameworks),
+      generatePostsFromTranscript(fullText, authorContext, allFrameworks),
+    ]);
+
+    // Map preferred framework names → IDs
+    const preferredFrameworkIds = analysis.preferredFrameworkNames
+      .map((name) => allFrameworks.find((f) => f.name.toLowerCase() === name.toLowerCase())?.id)
+      .filter((id): id is number => id !== undefined);
+
+    // Persist voice profile update
     await db.update(schema.authors).set({
-      voiceProfile: result.voiceProfile,
-      styleNotes: result.styleNotes,
-      contentAngles: result.contentAngles,
-    } as any).where(eq(schema.authors.id, authorId));
+      voiceProfile: analysis.voiceProfile,
+      styleNotes: analysis.styleNotes,
+      contentAngles: analysis.contentAngles,
+      ...(preferredFrameworkIds.length > 0 ? { preferredFrameworks: preferredFrameworkIds } : {}),
+    }).where(eq(schema.authors.id, authorId));
+
+    // Create signals from extracted posts
+    let signalsCreated = 0;
+    if (generated.length > 0) {
+      const transcriptRow = await ensureTranscript({
+        title: `LinkedIn: ${author.name}`,
+        content: fullText,
+        source: "manual",
+        sourceMeetingDate: new Date(),
+      });
+
+      const candidates = generated.map((s) => ({
+        rawContent: s.rawContent,
+        title: s.title ?? null,
+        contentType: "post" as const,
+        speaker: null as string | null,
+        hashtags: s.hashtags ?? [],
+        contentAngles: s.contentAngle ? [s.contentAngle] : [] as string[],
+        recommendedAuthorId: authorId,
+        bestFrameworkId: s.frameworkName
+          ? (allFrameworks.find((f) => f.name.toLowerCase() === s.frameworkName!.toLowerCase())?.id ?? null)
+          : null,
+        source: "manual" as const,
+        sourceMeetingTitle: `LinkedIn: ${author.name}`,
+        sourceMeetingDate: new Date(),
+        transcriptId: transcriptRow.id,
+      }));
+
+      const deduped = await deduplicateAgainstExisting(candidates);
+      if (deduped.length > 0) {
+        const inserted = await db.insert(schema.signals).values(deduped).returning({ id: schema.signals.id });
+        await scoreSignalsOrDelete(inserted.map((r) => r.id));
+        signalsCreated = inserted.length;
+      }
+    }
 
     revalidatePath(`/authors/${authorId}`);
-    return { ok: true, message: "LinkedIn profile analysed and voice updated." };
-  } catch {
+    revalidatePath("/signals");
+
+    const msg = signalsCreated > 0
+      ? `Profile analysed — voice updated, ${signalsCreated} signal(s) created from your posts.`
+      : "LinkedIn profile analysed — voice and content angles updated.";
+    return { ok: true, message: msg };
+  } catch (e: any) {
+    console.error("[scrapeLinkedin]", e);
     return { ok: false, message: "Failed to read LinkedIn profile." };
   }
 }

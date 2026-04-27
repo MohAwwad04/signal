@@ -85,7 +85,7 @@ function extractVanityFromUrl(url: string): string | null {
   return m ? m[1] : null;
 }
 
-async function jinaGet(url: string): Promise<string | null> {
+export async function jinaGet(url: string): Promise<string | null> {
   try {
     const res = await fetch(`https://r.jina.ai/${url}`, {
       headers: { Accept: "text/plain", "X-No-Cache": "true" },

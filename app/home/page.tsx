@@ -1,8 +1,46 @@
 import Link from "next/link";
+import { db, schema } from "@/lib/db";
+import { desc, sql, eq } from "drizzle-orm";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Radio, FileEdit, Send, Zap, Sparkles, Brain, GitBranch, LogIn } from "lucide-react";
+import { timeAgo } from "@/lib/utils";
+import { ArrowUpRight, Radio, FileEdit, Send, Users, Zap, Sparkles, Brain, GitBranch, LogIn } from "lucide-react";
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+async function loadStats() {
+  try {
+    const [signalsByStatus, postsByStatus, authorsCount, recent] = await Promise.all([
+      db.select({ status: schema.signals.status, count: sql<number>`count(*)::int` })
+        .from(schema.signals).groupBy(schema.signals.status),
+      db.select({ status: schema.posts.status, count: sql<number>`count(*)::int` })
+        .from(schema.posts).groupBy(schema.posts.status),
+      db.select({ count: sql<number>`count(*)::int` })
+        .from(schema.authors).where(eq(schema.authors.active, true)),
+      db.select({
+        id: schema.posts.id, content: schema.posts.content, status: schema.posts.status,
+        updatedAt: schema.posts.updatedAt, hookStrengthScore: schema.posts.hookStrengthScore,
+      }).from(schema.posts).orderBy(desc(schema.posts.updatedAt)).limit(4),
+    ]);
+    const byStatus = (rows: { status: string; count: number }[]) =>
+      Object.fromEntries(rows.map((r) => [r.status, r.count])) as Record<string, number>;
+    return {
+      unused: byStatus(signalsByStatus).unused ?? 0,
+      inReview: byStatus(postsByStatus).in_review ?? 0,
+      published: byStatus(postsByStatus).published ?? 0,
+      authors: authorsCount[0]?.count ?? 0,
+      recent,
+      dbOk: true as const,
+    };
+  } catch {
+    return { dbOk: false as const };
+  }
+}
 
 export default async function HomePage() {
+  const stats = await loadStats();
+
   return (
     <div className="min-h-screen">
 
@@ -291,4 +329,3 @@ function ArrowDown() {
     </svg>
   );
 }
-
