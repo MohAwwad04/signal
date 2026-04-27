@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 const PUBLIC_PATHS = [
+  "/home",
   "/login",
   "/invite",
   "/api/auth/login",

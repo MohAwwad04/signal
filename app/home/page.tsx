@@ -4,7 +4,7 @@ import { desc, sql, eq } from "drizzle-orm";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { timeAgo } from "@/lib/utils";
-import { ArrowUpRight, Radio, FileEdit, Send, Users, Zap, Sparkles, Brain, GitBranch } from "lucide-react";
+import { ArrowUpRight, Radio, FileEdit, Send, Users, Zap, Sparkles, Brain, GitBranch, LogIn } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -43,6 +43,16 @@ export default async function HomePage() {
 
   return (
     <div className="min-h-screen">
+
+      {/* Sign in button */}
+      <div className="fixed top-5 right-6 z-50">
+        <Link href="/login">
+          <Button variant="outline" size="sm" className="gap-2">
+            <LogIn className="h-3.5 w-3.5" />
+            Sign in
+          </Button>
+        </Link>
+      </div>
 
       {/* ── Hero ── */}
       <section className="relative overflow-hidden px-6 pt-14 pb-20 md:px-10 md:pt-20 md:pb-28">
