@@ -284,3 +284,11 @@ export default async function HomePage() {
   );
 }
 
+function ArrowDown() {
+  return (
+    <svg width="16" height="20" viewBox="0 0 16 20" fill="none" className="text-muted-foreground/40">
+      <path d="M8 0v16M2 10l6 8 6-8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
