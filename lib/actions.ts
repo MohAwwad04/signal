@@ -325,7 +325,7 @@ export async function updatePostContentAction(postId: number, newContent: string
     authorId: current.authorId,
     before: current.content,
     after: newContent,
-    editType: instruction ? `assisted:${instruction.slice(0, 40)}` : "manual",
+    editType: instruction ? "assisted" : "manual",
     instruction: instruction ?? null,
   });
 
