@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -10,6 +10,7 @@ import {
   updateSignalContentAnglesAction,
   scoreSignalAction,
   getActiveAuthorsAction,
+  getGlobalAnglesAction,
 } from "@/lib/actions";
 import { toast } from "@/components/ui/toaster";
 import { Linkedin, Tag, FileText, BarChart2, ChevronDown, ChevronUp, Check, X, Plus, Star, Loader2, Zap } from "lucide-react";
@@ -33,11 +34,14 @@ export function AuthorCard({
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [loadingList, setLoadingList] = useState(false);
-  const [liveAuthors, setLiveAuthors] = useState<Author[] | null>(null);
+  const [liveAuthors, setLiveAuthors] = useState<Author[]>(initialAuthors);
   const [localAuthor, setLocalAuthor] = useState<Author | null>(author);
 
-  // Sync initial author into context on mount (only once)
-  const authors = liveAuthors ?? initialAuthors;
+  useEffect(() => {
+    getActiveAuthorsAction().then(setLiveAuthors).catch(() => {});
+  }, []);
+
+  const authors = liveAuthors;
 
   async function openChange() {
     setEditing(true);
@@ -46,7 +50,7 @@ export function AuthorCard({
       const fresh = await getActiveAuthorsAction();
       setLiveAuthors(fresh);
     } catch {
-      // keep initial list on error
+      // keep current list on error
     } finally {
       setLoadingList(false);
     }
@@ -163,9 +167,14 @@ export function SignalAnglesCard({
   const [angles, setAngles] = useState<string[]>(signalAngles);
   const [newAngle, setNewAngle] = useState("");
   const [saving, setSaving] = useState(false);
+  const [liveGlobalAngles, setLiveGlobalAngles] = useState<ContentAngle[]>(allAngles);
+
+  useEffect(() => {
+    getGlobalAnglesAction().then(setLiveGlobalAngles).catch(() => {});
+  }, []);
 
   const suggestions = newAngle.trim().length > 1
-    ? allAngles.filter((a) =>
+    ? liveGlobalAngles.filter((a) =>
         a.name.toLowerCase().includes(newAngle.toLowerCase()) && !angles.includes(a.name)
       )
     : [];

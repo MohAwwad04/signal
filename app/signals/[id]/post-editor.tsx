@@ -15,6 +15,7 @@ import {
   submitForReviewAction,
   getAuthorRecommendationAction,
   getAnglesForSignalEditorAction,
+  getActiveAuthorsAction,
 } from "@/lib/actions";
 import { toast } from "@/components/ui/toaster";
 import {
@@ -46,7 +47,7 @@ export function PostEditor({
   signalId: number;
   initialContent: string;
   authorName?: string | null;
-  allAuthors?: { id: number; name: string }[];
+  allAuthors?: { id: number; name: string; role?: string | null }[];
   frameworks?: Framework[];
   bestFrameworkId?: number | null;
   signalAngles?: string[];
@@ -78,6 +79,11 @@ export function PostEditor({
   const [localBestId, setLocalBestId] = useState<number | null>(bestFrameworkId ?? null);
   const [starringId, setStarringId] = useState<number | null>(null);
 
+  // ── live authors (fetched on mount) ──
+  const [liveAuthors, setLiveAuthors] = useState<{ id: number; name: string; role: string | null }[]>(
+    allAuthors.map((a) => ({ ...a, role: a.role ?? null }))
+  );
+
   // ── angle state ──
   const [liveAngles, setLiveAngles] = useState<AngleWithAuthor[]>(anglesWithAuthor);
   const [anglesLoading, setAnglesLoading] = useState(true);
@@ -87,6 +93,7 @@ export function PostEditor({
   const [customAngle, setCustomAngle] = useState("");
 
   useEffect(() => {
+    getActiveAuthorsAction().then(setLiveAuthors).catch(() => {});
     if (!isAdmin && !isSuperAdmin) { setAnglesLoading(false); return; }
     getAnglesForSignalEditorAction()
       .then(setLiveAngles)
@@ -293,7 +300,7 @@ export function PostEditor({
   }, [uniqueAuthorAngles]);
 
   const authorName = currentAuthorId
-    ? (allAuthors.find((a) => a.id === currentAuthorId)?.name ?? initialAuthorName)
+    ? (liveAuthors.find((a) => a.id === currentAuthorId)?.name ?? initialAuthorName)
     : initialAuthorName;
 
   const initials = authorName

@@ -24,10 +24,9 @@ export default async function SignalDetailPage({ params }: { params: { id: strin
 
   const id = Number(params.id);
 
-  const [signal, frameworks, allGlobalAngles] = await Promise.all([
+  const [signal, frameworks] = await Promise.all([
     db.select().from(schema.signals).where(eq(schema.signals.id, id)).then((r) => r[0]),
     db.select().from(schema.frameworks).orderBy(schema.frameworks.name),
-    db.select({ id: schema.contentAngles.id, name: schema.contentAngles.name }).from(schema.contentAngles).orderBy(schema.contentAngles.name),
   ]);
 
   if (!signal) notFound();
@@ -175,7 +174,7 @@ export default async function SignalDetailPage({ params }: { params: { id: strin
             signalId={signal.id}
             initialContent={signal.rawContent}
             authorName={author?.name ?? null}
-            allAuthors={allAuthors}
+            allAuthors={[]}
             frameworks={frameworksForEditor}
             bestFrameworkId={signal.bestFrameworkId ?? null}
             signalAngles={signalAngles}
@@ -239,13 +238,13 @@ export default async function SignalDetailPage({ params }: { params: { id: strin
           <AuthorCard
             signalId={signal.id}
             author={author}
-            allAuthors={allAuthors}
+            allAuthors={[]}
           />
 
           <SignalAnglesCard
             signalId={signal.id}
             signalAngles={signalAngles}
-            allAngles={allGlobalAngles}
+            allAngles={[]}
           />
 
           {transcriptText && (

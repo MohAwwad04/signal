@@ -790,7 +790,8 @@ export async function removeUserAction(id: number) {
 }
 
 export async function getActiveAuthorsAction(): Promise<{ id: number; name: string; role: string | null }[]> {
-  return db
+  const visibleAuthorIds = await getVisibleAuthorIds();
+  const rows = await db
     .select({ id: schema.authors.id, name: schema.authors.name, role: schema.authors.role })
     .from(schema.authors)
     .leftJoin(schema.users, eq(schema.users.authorId, schema.authors.id))
@@ -802,6 +803,15 @@ export async function getActiveAuthorsAction(): Promise<{ id: number; name: stri
     )
     .groupBy(schema.authors.id, schema.authors.name, schema.authors.role)
     .orderBy(schema.authors.name)
+    .catch(() => []);
+  return visibleAuthorIds === null ? rows : rows.filter((a) => visibleAuthorIds.includes(a.id));
+}
+
+export async function getGlobalAnglesAction(): Promise<{ id: number; name: string }[]> {
+  return db
+    .select({ id: schema.contentAngles.id, name: schema.contentAngles.name })
+    .from(schema.contentAngles)
+    .orderBy(schema.contentAngles.name)
     .catch(() => []);
 }
 
