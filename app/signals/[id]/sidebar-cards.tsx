@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -9,6 +9,8 @@ import {
   updateSignalAuthorAction,
   updateSignalContentAnglesAction,
   scoreSignalAction,
+  getActiveAuthorsAction,
+  getGlobalAnglesAction,
 } from "@/lib/actions";
 import { toast } from "@/components/ui/toaster";
 import { Linkedin, Tag, FileText, BarChart2, ChevronDown, ChevronUp, Check, X, Plus, Star, Loader2, Zap } from "lucide-react";
@@ -22,22 +24,45 @@ type ContentAngle = { id: number; name: string };
 export function AuthorCard({
   signalId,
   author,
-  allAuthors,
+  allAuthors: initialAuthors,
 }: {
   signalId: number;
   author: Author | null;
   allAuthors: Author[];
 }) {
+  const { currentAuthorId, setCurrentAuthorId } = useScores();
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [loadingList, setLoadingList] = useState(false);
+  const [liveAuthors, setLiveAuthors] = useState<Author[]>(initialAuthors);
   const [localAuthor, setLocalAuthor] = useState<Author | null>(author);
+
+  useEffect(() => {
+    getActiveAuthorsAction().then(setLiveAuthors).catch(() => {});
+  }, []);
+
+  const authors = liveAuthors;
+
+  async function openChange() {
+    setEditing(true);
+    setLoadingList(true);
+    try {
+      const fresh = await getActiveAuthorsAction();
+      setLiveAuthors(fresh);
+    } catch {
+      // keep current list on error
+    } finally {
+      setLoadingList(false);
+    }
+  }
 
   async function selectAuthor(authorId: number | null) {
     setSaving(true);
     try {
       await updateSignalAuthorAction(signalId, authorId);
-      const next = authorId ? (allAuthors.find((a) => a.id === authorId) ?? null) : null;
+      const next = authorId ? (authors.find((a) => a.id === authorId) ?? null) : null;
       setLocalAuthor(next);
+      setCurrentAuthorId(authorId);
       toast({ title: "Author updated", kind: "success" });
     } catch {
       toast({ title: "Failed to update author", kind: "error" });
@@ -47,8 +72,12 @@ export function AuthorCard({
     }
   }
 
-  const initials = localAuthor
-    ? localAuthor.name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase()
+  const displayAuthor = currentAuthorId
+    ? (authors.find((a) => a.id === currentAuthorId) ?? localAuthor)
+    : localAuthor;
+
+  const initials = displayAuthor
+    ? displayAuthor.name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase()
     : "?";
 
   return (
@@ -67,47 +96,54 @@ export function AuthorCard({
                 {initials}
               </div>
               <div>
-                <div className="text-sm font-medium">{localAuthor?.name ?? "Unassigned"}</div>
-                {localAuthor?.role && <div className="text-[11px] text-muted-foreground">{localAuthor.role}</div>}
+                <div className="text-sm font-medium">{displayAuthor?.name ?? "Unassigned"}</div>
+                {displayAuthor?.role && <div className="text-[11px] text-muted-foreground">{displayAuthor.role}</div>}
               </div>
             </div>
-            <Button size="sm" variant="outline" onClick={() => setEditing(true)} className="h-7 text-xs">
+            <Button size="sm" variant="outline" onClick={openChange} className="h-7 text-xs">
               Change
             </Button>
           </div>
         ) : (
           <div className="space-y-2">
-            <div className="grid gap-1.5">
-              <button
-                type="button"
-                onClick={() => selectAuthor(null)}
-                disabled={saving}
-                className={cn(
-                  "flex items-center gap-2 rounded-lg border px-3 py-1.5 text-left text-xs transition-colors",
-                  !localAuthor ? "border-primary bg-primary/10" : "border-border hover:border-primary/40"
-                )}
-              >
-                <span className="font-medium text-muted-foreground">None</span>
-              </button>
-              {allAuthors.map((a) => (
+            {loadingList ? (
+              <div className="flex items-center gap-2 py-2 text-xs text-muted-foreground">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                Loading…
+              </div>
+            ) : (
+              <div className="grid gap-1.5">
                 <button
-                  key={a.id}
                   type="button"
-                  onClick={() => selectAuthor(a.id)}
+                  onClick={() => selectAuthor(null)}
                   disabled={saving}
                   className={cn(
                     "flex items-center gap-2 rounded-lg border px-3 py-1.5 text-left text-xs transition-colors",
-                    localAuthor?.id === a.id ? "border-primary bg-primary/10" : "border-border hover:border-primary/40"
+                    !displayAuthor ? "border-primary bg-primary/10" : "border-border hover:border-primary/40"
                   )}
                 >
-                  <div>
-                    <div className="font-medium">{a.name}</div>
-                    {a.role && <div className="text-muted-foreground">{a.role}</div>}
-                  </div>
-                  {localAuthor?.id === a.id && <Check className="ml-auto h-3 w-3 text-primary" />}
+                  <span className="font-medium text-muted-foreground">None</span>
                 </button>
-              ))}
-            </div>
+                {authors.map((a) => (
+                  <button
+                    key={a.id}
+                    type="button"
+                    onClick={() => selectAuthor(a.id)}
+                    disabled={saving}
+                    className={cn(
+                      "flex items-center gap-2 rounded-lg border px-3 py-1.5 text-left text-xs transition-colors",
+                      displayAuthor?.id === a.id ? "border-primary bg-primary/10" : "border-border hover:border-primary/40"
+                    )}
+                  >
+                    <div>
+                      <div className="font-medium">{a.name}</div>
+                      {a.role && <div className="text-muted-foreground">{a.role}</div>}
+                    </div>
+                    {displayAuthor?.id === a.id && <Check className="ml-auto h-3 w-3 text-primary" />}
+                  </button>
+                ))}
+              </div>
+            )}
             <Button size="sm" variant="ghost" onClick={() => setEditing(false)} className="h-7 w-full text-xs">
               Cancel
             </Button>
@@ -131,9 +167,14 @@ export function SignalAnglesCard({
   const [angles, setAngles] = useState<string[]>(signalAngles);
   const [newAngle, setNewAngle] = useState("");
   const [saving, setSaving] = useState(false);
+  const [liveGlobalAngles, setLiveGlobalAngles] = useState<ContentAngle[]>(allAngles);
+
+  useEffect(() => {
+    getGlobalAnglesAction().then(setLiveGlobalAngles).catch(() => {});
+  }, []);
 
   const suggestions = newAngle.trim().length > 1
-    ? allAngles.filter((a) =>
+    ? liveGlobalAngles.filter((a) =>
         a.name.toLowerCase().includes(newAngle.toLowerCase()) && !angles.includes(a.name)
       )
     : [];

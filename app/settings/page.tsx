@@ -6,7 +6,7 @@ import { getCurrentUser } from "@/lib/session";
 import { FathomCard } from "@/app/authors/[id]/fathom-card";
 import { LinkedInCard } from "@/app/authors/[id]/linkedin-card";
 import { GoogleDriveCard } from "@/app/authors/[id]/google-drive-card";
-import { LinkedinUrlEditor } from "@/app/authors/[id]/linkedin-url-editor";
+import { LinkedinAutofill } from "./linkedin-autofill";
 import { ContentAngles } from "@/app/authors/[id]/content-angles";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -59,12 +59,8 @@ export default async function SettingsPage() {
         </div>
         <h1 className="text-3xl font-bold tracking-tight">{author.name}</h1>
         {author.bio && <p className="mt-1 text-sm text-muted-foreground">{author.bio}</p>}
-        {/* TEMP DEBUG — remove after diagnosis */}
-        <pre className="mt-2 text-[10px] bg-muted rounded p-2 overflow-auto">
-          {JSON.stringify({ authorId: author.id, angles: author.contentAngles, hasVoice: !!author.voiceProfile, hasStyle: !!author.styleNotes }, null, 2)}
-        </pre>
-        <div className="mt-2">
-          <LinkedinUrlEditor authorId={author.id} initialUrl={author.linkedinUrl ?? null} />
+        <div className="mt-3">
+          <LinkedinAutofill authorId={author.id} initialUrl={author.linkedinUrl ?? null} />
         </div>
       </header>
 

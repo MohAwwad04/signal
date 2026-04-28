@@ -333,6 +333,71 @@ export async function selectBestFramework(
   return match?.id ?? null;
 }
 
+/* ---------- author-aware recommendation ---------- */
+
+export async function recommendForAuthor(
+  signalContent: string,
+  author: {
+    name: string;
+    role: string | null;
+    voiceProfile: string | null;
+    preferredFrameworkNames: string[];
+  },
+  frameworks: { id: number; name: string; description: string }[],
+  authorAngles: string[]
+): Promise<{ frameworkId: number | null; angle: string | null }> {
+  if (!frameworks.length && !authorAngles.length) return { frameworkId: null, angle: null };
+
+  const frameworkList = frameworks.length
+    ? frameworks.map((f) => `- ${f.name}: ${f.description}`).join("\n")
+    : "(none)";
+  const angleList = authorAngles.length
+    ? authorAngles.map((a) => `- ${a}`).join("\n")
+    : "(none)";
+  const profileSection = [
+    author.role ? `Role: ${author.role}` : "",
+    author.voiceProfile ? `Voice profile:\n${author.voiceProfile}` : "",
+    author.preferredFrameworkNames.length
+      ? `Preferred frameworks: ${author.preferredFrameworkNames.join(", ")}`
+      : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const raw = await textCall({
+    maxTokens: 150,
+    temperature: 0.2,
+    system: `You are a LinkedIn content strategist. Given a signal, an author profile, their content angles, and available frameworks — choose the single best framework and single best content angle for this author and signal.
+Return ONLY valid JSON: { "framework": "<exact framework name or null>", "angle": "<exact angle name or null>" }`,
+    user: `AUTHOR: ${author.name}
+${profileSection}
+
+AVAILABLE FRAMEWORKS:
+${frameworkList}
+
+AUTHOR'S CONTENT ANGLES:
+${angleList}
+
+SIGNAL:
+${signalContent.slice(0, 1000)}
+
+Return JSON only.`,
+  });
+
+  let parsed: { framework?: string | null; angle?: string | null } = {};
+  try {
+    parsed = extractJson<typeof parsed>(raw);
+  } catch { /* degrade gracefully */ }
+
+  const frameworkId = parsed.framework
+    ? (frameworks.find((f) => f.name.toLowerCase() === (parsed.framework ?? "").toLowerCase())?.id ?? null)
+    : null;
+  const angle =
+    typeof parsed.angle === "string" && parsed.angle.trim() ? parsed.angle.trim() : null;
+
+  return { frameworkId, angle };
+}
+
 /* ---------- framework reformat ---------- */
 
 export async function reformatPostWithFramework(

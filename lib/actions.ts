@@ -2,7 +2,7 @@
 
 import { db, schema } from "@/lib/db";
 import { revalidatePath } from "next/cache";
-import { desc, eq, and, sql, lt, inArray } from "drizzle-orm";
+import { desc, eq, and, sql, inArray, or, isNull } from "drizzle-orm";
 import { extractLinkedinPostUrn, jinaGet, fetchLinkedinAuthoredPosts, getValidLinkedinToken } from "@/lib/linkedin";
 import { sendInviteEmail } from "@/lib/email";
 import { randomBytes } from "crypto";
@@ -16,9 +16,10 @@ import {
   generateDesignBrief,
   reformatPostWithFramework,
   analyzeLinkedinPageContent,
+  recommendForAuthor,
 } from "@/lib/claude";
 import { ensureTranscript, scoreSignalsOrDelete, deduplicateAgainstExisting } from "@/lib/signals-helpers";
-import { getVisibleAuthorIds } from "@/lib/session";
+import { getVisibleAuthorIds, getCurrentUser } from "@/lib/session";
 
 /* ========== SIGNALS ========== */
 
@@ -268,7 +269,8 @@ export async function generatePostAction(input: {
   };
 
   let text = await generatePost(postInput);
-  let scores = await scorePost(text).catch(() => ({ hookStrength: 0, specificity: 0, notes: "" }));
+  const zeroScores = { hookStrength: 0, specificity: 0, clarity: 0, emotionalResonance: 0, callToAction: 0, notes: "" };
+  let scores = await scorePost(text).catch(() => zeroScores);
 
   // If the first draft scores poorly, try once more at a lower temperature for tighter output
   if (scores.hookStrength < 45 || scores.specificity < 45) {
@@ -293,6 +295,9 @@ export async function generatePostAction(input: {
       originalContent: text,
       hookStrengthScore: scores.hookStrength,
       specificityScore: scores.specificity,
+      clarityScore: scores.clarity,
+      emotionalResonanceScore: scores.emotionalResonance,
+      callToActionScore: scores.callToAction,
       status: "draft",
     })
     .returning();
@@ -378,6 +383,10 @@ export async function submitForReviewAction(postId: number) {
 }
 
 export async function approvePostAction(postId: number, notes?: string) {
+  const session = await getCurrentUser();
+  const [post] = await db.select({ authorId: schema.posts.authorId }).from(schema.posts).where(eq(schema.posts.id, postId));
+  if (!post) throw new Error("Post not found.");
+  if (!session?.authorId || session.authorId !== post.authorId) throw new Error("Not authorized to approve this post.");
   await db
     .update(schema.posts)
     .set({ status: "approved", reviewerNotes: notes ?? null, updatedAt: new Date() })
@@ -387,6 +396,10 @@ export async function approvePostAction(postId: number, notes?: string) {
 }
 
 export async function rejectPostAction(postId: number, notes: string) {
+  const session = await getCurrentUser();
+  const [post] = await db.select({ authorId: schema.posts.authorId }).from(schema.posts).where(eq(schema.posts.id, postId));
+  if (!post) throw new Error("Post not found.");
+  if (!session?.authorId || session.authorId !== post.authorId) throw new Error("Not authorized to reject this post.");
   await db
     .update(schema.posts)
     .set({ status: "rejected", reviewerNotes: notes, updatedAt: new Date() })
@@ -569,17 +582,31 @@ export async function deleteContentAngleAction(id: number) {
 }
 
 export async function addContentAngleToAuthorAction(authorId: number, angleId: number) {
-  await db
-    .insert(schema.authorContentAngles)
-    .values({ authorId, contentAngleId: angleId })
-    .onConflictDoNothing();
+  const [angle, author] = await Promise.all([
+    db.select({ name: schema.contentAngles.name }).from(schema.contentAngles).where(eq(schema.contentAngles.id, angleId)).then((r) => r[0] ?? null),
+    db.select({ contentAngles: schema.authors.contentAngles }).from(schema.authors).where(eq(schema.authors.id, authorId)).then((r) => r[0] ?? null),
+  ]);
+  await db.insert(schema.authorContentAngles).values({ authorId, contentAngleId: angleId }).onConflictDoNothing();
+  if (angle) {
+    const current = (author?.contentAngles as string[] | null) ?? [];
+    if (!current.includes(angle.name)) {
+      await db.update(schema.authors).set({ contentAngles: [...current, angle.name] } as any).where(eq(schema.authors.id, authorId));
+    }
+  }
   revalidatePath(`/authors/${authorId}`);
 }
 
 export async function removeContentAngleFromAuthorAction(authorId: number, angleId: number) {
-  await db
-    .delete(schema.authorContentAngles)
-    .where(and(eq(schema.authorContentAngles.authorId, authorId), eq(schema.authorContentAngles.contentAngleId, angleId)));
+  const [angle, author] = await Promise.all([
+    db.select({ name: schema.contentAngles.name }).from(schema.contentAngles).where(eq(schema.contentAngles.id, angleId)).then((r) => r[0] ?? null),
+    db.select({ contentAngles: schema.authors.contentAngles }).from(schema.authors).where(eq(schema.authors.id, authorId)).then((r) => r[0] ?? null),
+  ]);
+  await db.delete(schema.authorContentAngles).where(and(eq(schema.authorContentAngles.authorId, authorId), eq(schema.authorContentAngles.contentAngleId, angleId)));
+  if (angle) {
+    const current = (author?.contentAngles as string[] | null) ?? [];
+    const updated = current.filter((a) => a !== angle.name);
+    await db.update(schema.authors).set({ contentAngles: updated } as any).where(eq(schema.authors.id, authorId));
+  }
   revalidatePath(`/authors/${authorId}`);
 }
 
@@ -756,11 +783,155 @@ export async function addUserAction(email: string, role: string) {
 }
 
 export async function removeUserAction(id: number) {
+  const [user] = await db.select({ authorId: schema.users.authorId }).from(schema.users).where(eq(schema.users.id, id));
   await db.delete(schema.users).where(eq(schema.users.id, id));
+  if (user?.authorId) {
+    await db.update(schema.authors).set({ active: false }).where(eq(schema.authors.id, user.authorId)).catch(() => {});
+  }
   revalidatePath("/authors");
+  revalidatePath("/signals");
+}
+
+export async function getActiveAuthorsAction(): Promise<{ id: number; name: string; role: string | null }[]> {
+  const visibleAuthorIds = await getVisibleAuthorIds();
+  const rows = await db
+    .select({ id: schema.authors.id, name: schema.authors.name, role: schema.authors.role })
+    .from(schema.authors)
+    .leftJoin(schema.users, eq(schema.users.authorId, schema.authors.id))
+    .where(
+      and(
+        eq(schema.authors.active, true),
+        or(isNull(schema.users.id), eq(schema.users.active, true))
+      )
+    )
+    .groupBy(schema.authors.id, schema.authors.name, schema.authors.role)
+    .orderBy(schema.authors.name)
+    .catch(() => []);
+  return visibleAuthorIds === null ? rows : rows.filter((a) => visibleAuthorIds.includes(a.id));
+}
+
+export async function getGlobalAnglesAction(): Promise<{ id: number; name: string }[]> {
+  return db
+    .select({ id: schema.contentAngles.id, name: schema.contentAngles.name })
+    .from(schema.contentAngles)
+    .orderBy(schema.contentAngles.name)
+    .catch(() => []);
 }
 
 /* ========== DASHBOARD ========== */
+
+/* ========== SIGNAL EDITOR ANGLES (client-side fetch) ========== */
+
+export async function getAnglesForSignalEditorAction(): Promise<
+  { name: string; authorId: number; authorName: string }[]
+> {
+  const session = await getCurrentUser();
+  if (!session?.isAdmin && !session?.isSuperAdmin) return [];
+
+  const visibleAuthorIds = await getVisibleAuthorIds();
+
+  const authors = await db
+    .select({ id: schema.authors.id, name: schema.authors.name, contentAngles: schema.authors.contentAngles })
+    .from(schema.authors)
+    .where(eq(schema.authors.active, true))
+    .then((rows) =>
+      visibleAuthorIds === null ? rows : rows.filter((a) => visibleAuthorIds.includes(a.id))
+    )
+    .catch(() => []);
+
+  const seen = new Set<string>();
+  const result: { name: string; authorId: number; authorName: string }[] = [];
+
+  // Primary: jsonb array on each author
+  for (const a of authors) {
+    for (const name of (a.contentAngles as string[] | null) ?? []) {
+      const key = `${a.id}:${name}`;
+      if (!seen.has(key)) { seen.add(key); result.push({ name, authorId: a.id, authorName: a.name }); }
+    }
+  }
+
+  // Supplemental: join table (catches angles not yet synced to jsonb)
+  const authorIds = authors.map((a) => a.id);
+  if (authorIds.length > 0) {
+    const joinRows = await db
+      .select({
+        name: schema.contentAngles.name,
+        authorId: schema.authorContentAngles.authorId,
+        authorName: schema.authors.name,
+      })
+      .from(schema.authorContentAngles)
+      .innerJoin(schema.contentAngles, eq(schema.authorContentAngles.contentAngleId, schema.contentAngles.id))
+      .innerJoin(schema.authors, eq(schema.authorContentAngles.authorId, schema.authors.id))
+      .where(inArray(schema.authorContentAngles.authorId, authorIds))
+      .catch(() => []);
+
+    for (const r of joinRows) {
+      const key = `${r.authorId}:${r.name}`;
+      if (!seen.has(key)) { seen.add(key); result.push(r); }
+    }
+  }
+
+  return result;
+}
+
+/* ========== AUTHOR-AWARE RECOMMENDATION ========== */
+
+export async function getAuthorRecommendationAction(
+  signalId: number,
+  authorId: number
+): Promise<{ frameworkId: number | null; angle: string | null }> {
+  const session = await getCurrentUser();
+  if (!session?.isAdmin && !session?.isSuperAdmin) throw new Error("Not authorized");
+
+  const [signal, author, frameworks, authorAnglesRows] = await Promise.all([
+    db
+      .select({ rawContent: schema.signals.rawContent })
+      .from(schema.signals)
+      .where(eq(schema.signals.id, signalId))
+      .then((r) => r[0] ?? null),
+    db
+      .select({
+        name: schema.authors.name,
+        role: schema.authors.role,
+        voiceProfile: schema.authors.voiceProfile,
+        preferredFrameworks: schema.authors.preferredFrameworks,
+      })
+      .from(schema.authors)
+      .where(eq(schema.authors.id, authorId))
+      .then((r) => r[0] ?? null),
+    db
+      .select({ id: schema.frameworks.id, name: schema.frameworks.name, description: schema.frameworks.description })
+      .from(schema.frameworks)
+      .orderBy(schema.frameworks.name),
+    db
+      .select({ contentAngles: schema.authors.contentAngles })
+      .from(schema.authors)
+      .where(eq(schema.authors.id, authorId))
+      .then((r) => ((r[0]?.contentAngles as string[] | null) ?? []).map((name) => ({ name })))
+      .catch(() => [] as { name: string }[]),
+  ]);
+
+  if (!signal || !author) return { frameworkId: null, angle: null };
+
+  const preferredFrameworkIds = (author.preferredFrameworks as number[] | null) ?? [];
+  const preferredFrameworkNames = preferredFrameworkIds
+    .map((id) => frameworks.find((f) => f.id === id)?.name)
+    .filter((n): n is string => !!n);
+
+  const authorAngles = authorAnglesRows.map((r) => r.name);
+
+  return recommendForAuthor(
+    signal.rawContent,
+    {
+      name: author.name,
+      role: author.role,
+      voiceProfile: author.voiceProfile,
+      preferredFrameworkNames,
+    },
+    frameworks,
+    authorAngles
+  ).catch(() => ({ frameworkId: null, angle: null }));
+}
 
 export async function getDashboardStats() {
   const [signalCounts, postCounts, authorCount, recentPosts, topAuthors] = await Promise.all([
