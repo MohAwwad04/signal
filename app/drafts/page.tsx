@@ -14,9 +14,9 @@ export const fetchCache = "force-no-store";
 type TabDef = { key: string; label: string; statuses: string[]; icon: any; color: string };
 type TabKey = "drafts" | "accepted" | "rejected";
 
-// Admins see draft (their working copies) + in_review; regular users only see in_review (sent to them)
+// Admins only see their own drafts (in_review posts are owned by the assigned user); regular users only see in_review (sent to them)
 const ADMIN_TABS: TabDef[] = [
-  { key: "drafts",   label: "In review", statuses: ["draft", "in_review"], icon: FileEdit,      color: "text-blue-500"   },
+  { key: "drafts",   label: "Drafts",    statuses: ["draft"],                icon: FileEdit,      color: "text-blue-500"   },
   { key: "accepted", label: "Accepted",  statuses: ["approved", "published"], icon: CheckCircle2, color: "text-emerald-500" },
   { key: "rejected", label: "Rejected",  statuses: ["rejected"],             icon: XCircle,      color: "text-red-500"    },
 ];
@@ -89,7 +89,7 @@ export default async function DraftsPage({ searchParams }: { searchParams: { tab
       <header className="mb-8">
         <div className="flex items-center gap-2 mb-1">
           <FileEdit className="h-4 w-4 text-blue-500" />
-          <span className="text-xs font-semibold text-blue-500 uppercase tracking-widest">{isRegularUser ? "My posts" : "In review"}</span>
+          <span className="text-xs font-semibold text-blue-500 uppercase tracking-widest">{isRegularUser ? "My posts" : "Drafts"}</span>
         </div>
         <h1 className="text-3xl font-bold tracking-tight">Posts</h1>
         <p className="mt-1.5 text-sm text-muted-foreground">

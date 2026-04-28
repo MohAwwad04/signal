@@ -6,7 +6,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { timeAgo } from "@/lib/utils";
 import { Linkedin, ArrowUpRight, FileText, Archive, X, CheckSquare } from "lucide-react";
-import { SendSignalButton } from "./send-signal-button";
 import { GroupTitleEdit } from "./group-title-edit";
 import { bulkArchiveSignalsAction } from "@/lib/actions";
 
@@ -260,7 +259,6 @@ export function SignalsList({ groups, authorMap, draftCountMap }: Props) {
                       {meta}
                     </Link>
                     <div className="flex shrink-0 items-center gap-2">
-                      {(draftCountMap[s.id] ?? 0) > 0 && <SendSignalButton signalId={s.id} />}
                       <Link href={`/signals/${s.id}`}>
                         <ArrowUpRight className="h-4 w-4 text-muted-foreground/30 transition-all duration-200 group-hover:text-primary group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
                       </Link>
