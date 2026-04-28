@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -13,6 +13,7 @@ import {
   generatePostAction,
   updatePostContentAction,
   submitForReviewAction,
+  getAuthorRecommendationAction,
 } from "@/lib/actions";
 import { toast } from "@/components/ui/toaster";
 import {
@@ -90,6 +91,37 @@ export function PostEditor({
   const [sendingReview, setSendingReview] = useState(false);
   const [sentToReview, setSentToReview] = useState(false);
   const [activeAngle, setActiveAngle] = useState<string>(recommendedAngle ?? signalAngles[0] ?? "");
+
+  // ── author-aware recommendation state ──
+  const [authorRecAngle, setAuthorRecAngle] = useState<string | null>(null);
+  const [loadingRec, setLoadingRec] = useState(false);
+  // Per-author cache: Map<authorId, { frameworkId, angle }>
+  const recCacheRef = useRef<Map<number, { frameworkId: number | null; angle: string | null }>>(new Map());
+  // Race protection: only apply result from the most-recent request
+  const recReqIdRef = useRef(0);
+
+  useEffect(() => {
+    if (!currentAuthorId || (!isAdmin && !isSuperAdmin)) return;
+    // Skip if this is the initial author and we already have a signal-level recommendation
+    const cached = recCacheRef.current.get(currentAuthorId);
+    if (cached) {
+      if (cached.frameworkId) setSelectedFrameworkId(cached.frameworkId);
+      setAuthorRecAngle(cached.angle);
+      return;
+    }
+    const reqId = ++recReqIdRef.current;
+    setLoadingRec(true);
+    getAuthorRecommendationAction(signalId, currentAuthorId)
+      .then((rec) => {
+        if (reqId !== recReqIdRef.current) return; // stale response
+        recCacheRef.current.set(currentAuthorId, rec);
+        if (rec.frameworkId) setSelectedFrameworkId(rec.frameworkId);
+        setAuthorRecAngle(rec.angle);
+      })
+      .catch(() => { /* degrade silently */ })
+      .finally(() => { if (reqId === recReqIdRef.current) setLoadingRec(false); });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentAuthorId]);
 
   const mode: "signal" | "generated" = generatedPost ? "generated" : "signal";
 
@@ -385,6 +417,7 @@ export function PostEditor({
               <Sparkles className="h-3.5 w-3.5" />
               Framework
               <span className="ml-1 text-muted-foreground/60">· ★ star the best</span>
+              {loadingRec && <Loader2 className="ml-1 h-3 w-3 animate-spin text-muted-foreground/60" />}
             </div>
             <div className="flex flex-wrap gap-2">
               {frameworks.map((fw) => {
@@ -488,9 +521,10 @@ export function PostEditor({
                 <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">From signal</div>
               )}
               <div className="flex flex-wrap gap-1.5">
-                {filteredSignalAngles.map((a, idx) => {
+                {filteredSignalAngles.map((a) => {
                   const isActive = activeAngle === a && !customAngle;
-                  const isRecommended = a === recommendedAngle;
+                  const isAuthorRec = authorRecAngle === a;
+                  const isSignalRec = !isAuthorRec && a === recommendedAngle;
                   return (
                     <button
                       key={a}
@@ -506,7 +540,12 @@ export function PostEditor({
                       )}
                     >
                       {a}
-                      {isRecommended && (
+                      {isAuthorRec && (
+                        <span className="ml-0.5 rounded-full bg-blue-400/20 px-1 py-0.5 text-[9px] font-semibold text-blue-600 dark:text-blue-400">
+                          for {authorName?.split(" ")[0]}
+                        </span>
+                      )}
+                      {isSignalRec && (
                         <span className="ml-0.5 rounded-full bg-amber-400/20 px-1 py-0.5 text-[9px] font-semibold text-amber-600 dark:text-amber-400">
                           AI pick
                         </span>
@@ -521,14 +560,15 @@ export function PostEditor({
           {/* Author-grouped angles */}
           {authorGroups.length > 0 && (
             <div className="space-y-2">
-              {authorGroups.map(([authorName, angles]) => (
-                <div key={authorName}>
+              {authorGroups.map(([groupAuthorName, angles]) => (
+                <div key={groupAuthorName}>
                   {(isAdmin || isSuperAdmin) && (
-                    <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">{authorName}</div>
+                    <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">{groupAuthorName}</div>
                   )}
                   <div className="flex flex-wrap gap-1.5">
                     {angles.map((a) => {
                       const isActive = activeAngle === a.name && !customAngle;
+                      const isAuthorRec = authorRecAngle === a.name;
                       return (
                         <button
                           key={a.name}
@@ -536,7 +576,7 @@ export function PostEditor({
                           onClick={() => selectAngle(a.name)}
                           disabled={generating}
                           className={cn(
-                            "rounded-full border px-3 py-1 text-xs transition-colors",
+                            "flex items-center gap-1 rounded-full border px-3 py-1 text-xs transition-colors",
                             isActive
                               ? "border-primary bg-primary/10 text-foreground"
                               : "border-border bg-muted text-muted-foreground hover:border-primary/40 hover:text-foreground",
@@ -544,6 +584,11 @@ export function PostEditor({
                           )}
                         >
                           {a.name}
+                          {isAuthorRec && (
+                            <span className="ml-0.5 rounded-full bg-blue-400/20 px-1 py-0.5 text-[9px] font-semibold text-blue-600 dark:text-blue-400">
+                              for {authorName?.split(" ")[0]}
+                            </span>
+                          )}
                         </button>
                       );
                     })}

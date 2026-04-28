@@ -16,6 +16,7 @@ import {
   generateDesignBrief,
   reformatPostWithFramework,
   analyzeLinkedinPageContent,
+  recommendForAuthor,
 } from "@/lib/claude";
 import { ensureTranscript, scoreSignalsOrDelete, deduplicateAgainstExisting } from "@/lib/signals-helpers";
 import { getVisibleAuthorIds, getCurrentUser } from "@/lib/session";
@@ -791,6 +792,65 @@ export async function getActiveAuthorsAction(): Promise<{ id: number; name: stri
 }
 
 /* ========== DASHBOARD ========== */
+
+/* ========== AUTHOR-AWARE RECOMMENDATION ========== */
+
+export async function getAuthorRecommendationAction(
+  signalId: number,
+  authorId: number
+): Promise<{ frameworkId: number | null; angle: string | null }> {
+  const session = await getCurrentUser();
+  if (!session?.isAdmin && !session?.isSuperAdmin) throw new Error("Not authorized");
+
+  const [signal, author, frameworks, authorAnglesRows] = await Promise.all([
+    db
+      .select({ rawContent: schema.signals.rawContent })
+      .from(schema.signals)
+      .where(eq(schema.signals.id, signalId))
+      .then((r) => r[0] ?? null),
+    db
+      .select({
+        name: schema.authors.name,
+        role: schema.authors.role,
+        voiceProfile: schema.authors.voiceProfile,
+        preferredFrameworks: schema.authors.preferredFrameworks,
+      })
+      .from(schema.authors)
+      .where(eq(schema.authors.id, authorId))
+      .then((r) => r[0] ?? null),
+    db
+      .select({ id: schema.frameworks.id, name: schema.frameworks.name, description: schema.frameworks.description })
+      .from(schema.frameworks)
+      .orderBy(schema.frameworks.name),
+    db
+      .select({ name: schema.contentAngles.name })
+      .from(schema.authorContentAngles)
+      .innerJoin(schema.contentAngles, eq(schema.authorContentAngles.contentAngleId, schema.contentAngles.id))
+      .where(eq(schema.authorContentAngles.authorId, authorId))
+      .catch(() => [] as { name: string }[]),
+  ]);
+
+  if (!signal || !author) return { frameworkId: null, angle: null };
+
+  const preferredFrameworkIds = (author.preferredFrameworks as number[] | null) ?? [];
+  const preferredFrameworkNames = preferredFrameworkIds
+    .map((id) => frameworks.find((f) => f.id === id)?.name)
+    .filter((n): n is string => !!n);
+
+  const authorAngles = authorAnglesRows.map((r) => r.name);
+
+  return recommendForAuthor(
+    signal.rawContent,
+    {
+      name: author.name,
+      role: author.role,
+      voiceProfile: author.voiceProfile,
+      preferredFrameworkNames,
+    },
+    frameworks,
+    authorAngles
+  ).catch(() => ({ frameworkId: null, angle: null }));
+}
 
 export async function getDashboardStats() {
   const [signalCounts, postCounts, authorCount, recentPosts, topAuthors] = await Promise.all([
