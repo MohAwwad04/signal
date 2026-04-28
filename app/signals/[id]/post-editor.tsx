@@ -37,6 +37,10 @@ export function PostEditor({
   allAuthors = [],
   frameworks = [],
   bestFrameworkId,
+  contentAngles = [],
+  existingPostCount = 0,
+  defaultAuthorId = null,
+  initialGeneratedPost = null,
   signalAngles = [],
   anglesWithAuthor = [],
   globalAngles = [],
@@ -50,6 +54,10 @@ export function PostEditor({
   allAuthors?: { id: number; name: string; role?: string | null }[];
   frameworks?: Framework[];
   bestFrameworkId?: number | null;
+  contentAngles?: string[];
+  existingPostCount?: number;
+  defaultAuthorId?: number | null;
+  initialGeneratedPost?: { id: number; content: string } | null;
   signalAngles?: string[];
   anglesWithAuthor?: AngleWithAuthor[];
   globalAngles?: string[];
@@ -68,6 +76,7 @@ export function PostEditor({
   const [draft, setDraft] = useState(initialContent);
   const [saving, setSaving] = useState(false);
 
+  // ── framework state ──
   // ── framework state (for generation) ──
   const defaultFrameworkId = useMemo(() => {
     if (bestFrameworkId) return bestFrameworkId;
@@ -78,6 +87,7 @@ export function PostEditor({
   const [selectedFrameworkId, setSelectedFrameworkId] = useState<number | null>(defaultFrameworkId);
   const [localBestId, setLocalBestId] = useState<number | null>(bestFrameworkId ?? null);
   const [starringId, setStarringId] = useState<number | null>(null);
+  const [generatingFwId, setGeneratingFwId] = useState<number | null>(null);
 
   // ── live authors (fetched on mount) ──
   const [liveAuthors, setLiveAuthors] = useState<{ id: number; name: string; role: string | null }[]>(
@@ -104,8 +114,8 @@ export function PostEditor({
 
   // ── generate / result state ──
   const [generating, setGenerating] = useState(false);
-  const [generatedPost, setGeneratedPost] = useState<{ id: number; content: string } | null>(null);
-  const [generatedDraft, setGeneratedDraft] = useState("");
+  const [generatedPost, setGeneratedPost] = useState<{ id: number; content: string } | null>(initialGeneratedPost);
+  const [generatedDraft, setGeneratedDraft] = useState(initialGeneratedPost?.content ?? "");
   const [savingPost, setSavingPost] = useState(false);
   const [sendingReview, setSendingReview] = useState(false);
   const [sentToReview, setSentToReview] = useState(false);
@@ -143,8 +153,28 @@ export function PostEditor({
   }, [currentAuthorId]);
 
   const mode: "signal" | "generated" = generatedPost ? "generated" : "signal";
+  const autoGenFired = useRef(false);
+  // Tracks whether any post exists (DB count + anything generated this session)
+  const hasPost = existingPostCount > 0 || generatedPost !== null;
 
-  // ── signal actions ──
+  // Auto-generate on first open: use assigned author or fall back to first available author
+  useEffect(() => {
+    if (autoGenFired.current) return;
+    const effectiveAuthorId = authorId ?? defaultAuthorId;
+    if (!bestFrameworkId || hasPost || !effectiveAuthorId || !contentAngles.length) return;
+    autoGenFired.current = true;
+    setGenerating(true);
+    generatePostAction({ signalId, authorId: effectiveAuthorId, frameworkId: bestFrameworkId, contentAngle: contentAngles[0] })
+      .then((post) => {
+        setGeneratedPost({ id: post.id, content: post.content });
+        setGeneratedDraft(post.content);
+      })
+      .catch((e: any) => toast({ title: "Auto-generation failed", description: e?.message, kind: "error" }))
+      .finally(() => setGenerating(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ── signal edit actions ──
   async function save() {
     setSaving(true);
     try {
@@ -186,6 +216,21 @@ export function PostEditor({
       setLocalBestId(newBest);
       if (newBest) setSelectedFrameworkId(newBest);
       toast({ title: newBest ? `"${fw.name}" starred as best` : "Star removed", kind: "success" });
+      // Auto-generate when a framework is starred and no post exists yet
+      if (newBest && !hasPost) {
+        const effectiveAuthorId = authorId ?? defaultAuthorId;
+        if (effectiveAuthorId && contentAngles.length) {
+          setGeneratingFwId(fw.id);
+          setGenerating(true);
+          generatePostAction({ signalId, authorId: effectiveAuthorId, frameworkId: newBest, contentAngle: contentAngles[0] })
+            .then((post) => {
+              setGeneratedPost({ id: post.id, content: post.content });
+              setGeneratedDraft(post.content);
+            })
+            .catch((e: any) => toast({ title: "Generation failed", description: e?.message, kind: "error" }))
+            .finally(() => { setGeneratingFwId(null); setGenerating(false); });
+        }
+      }
     } catch (e: any) {
       toast({ title: "Failed to update", description: e.message, kind: "error" });
     } finally {
@@ -193,6 +238,35 @@ export function PostEditor({
     }
   }
 
+  // Clicking a framework button directly generates a post with that framework
+  async function generateWithFramework(fw: Framework) {
+    if (!authorId) { toast({ title: "Assign an author first", kind: "error" }); return; }
+    const finalAngle = (customAngle.trim() || angle || "").trim();
+    if (!finalAngle) { toast({ title: "Pick or write a content angle", kind: "error" }); return; }
+    setGeneratingFwId(fw.id);
+    setGenerating(true);
+    try {
+      const post = await generatePostAction({ signalId, authorId, frameworkId: fw.id, contentAngle: finalAngle });
+      setGeneratedPost({ id: post.id, content: post.content });
+      setGeneratedDraft(post.content);
+    } catch (e: any) {
+      toast({ title: "Generation failed", description: e?.message, kind: "error" });
+    } finally {
+      setGeneratingFwId(null);
+      setGenerating(false);
+    }
+  }
+
+  // Generate button uses the starred framework (or first available)
+  async function generate() {
+    if (!authorId) { toast({ title: "Assign an author first", kind: "error" }); return; }
+    const finalAngle = (customAngle.trim() || angle || "").trim();
+    if (!finalAngle) { toast({ title: "Pick or write a content angle", kind: "error" }); return; }
+    const fwId = localBestId ?? frameworks[0]?.id;
+    if (!fwId) return;
+    setGenerating(true);
+    try {
+      const post = await generatePostAction({ signalId, authorId, frameworkId: fwId, contentAngle: finalAngle });
   // ── generate ──
   async function generate(angleOverride?: string) {
     if (!currentAuthorId) { toast({ title: "Assign an author first", kind: "error" }); return; }
@@ -324,6 +398,11 @@ export function PostEditor({
               {mode === "generated" ? "Generated post · LinkedIn" : "LinkedIn · Signal"}
             </div>
           </div>
+          {generating && mode === "signal" && (
+            <span className="ml-auto flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" /> Generating…
+            </span>
+          )}
           {mode === "generated" && (
             <span className="ml-auto rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
               Generated
@@ -400,6 +479,7 @@ export function PostEditor({
               <div className="flex gap-2">
                 {!sentToReview ? (
                   <Button size="sm" onClick={sendToReview} disabled={sendingReview}>
+                    {sendingReview ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
                     {sendingReview
                       ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
                       : <Send className="h-3.5 w-3.5" />}
@@ -428,12 +508,19 @@ export function PostEditor({
 
       {/* ── Framework + angle card ── */}
       <div className="rounded-xl border border-border bg-card/60 px-4 py-3 space-y-4">
+        {/* Framework picker — clicking generates a post */}
 
         {/* Framework picker */}
         {frameworks.length > 0 && (
           <div>
             <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
               <Sparkles className="h-3.5 w-3.5" />
+              Generate with a framework
+              <span className="ml-1 text-muted-foreground/60">· ★ star the best one</span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {frameworks.map((fw) => {
+                const isLoading = generatingFwId === fw.id;
               Framework
               <span className="ml-1 text-muted-foreground/60">· ★ star the best</span>
               {loadingRec && <Loader2 className="ml-1 h-3 w-3 animate-spin text-muted-foreground/60" />}
@@ -446,6 +533,15 @@ export function PostEditor({
                 return (
                   <div key={fw.id} className="flex items-center gap-1">
                     <button
+                      onClick={() => generateWithFramework(fw)}
+                      disabled={generating}
+                      title={fw.description}
+                      className={cn(
+                        "flex items-center gap-1.5 rounded-l-full border px-3 py-1 text-xs font-medium transition-all",
+                        isStarred
+                          ? "border-primary bg-primary/10 text-primary"
+                          : "border-border bg-muted text-muted-foreground hover:border-primary/50 hover:text-foreground",
+                        generating && !isLoading && "opacity-50 cursor-not-allowed"
                       onClick={() => setSelectedFrameworkId(fw.id)}
                       title={fw.description}
                       className={cn(
@@ -618,6 +714,12 @@ export function PostEditor({
             </div>
           )}
 
+        {/* Generate button — uses starred/default framework */}
+        <div className="flex justify-end">
+          <Button onClick={generate} disabled={generating || !authorId}>
+            {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+            {generating ? "Generating…" : "Generate post"}
+          </Button>
           {/* No angles */}
           {filteredSignalAngles.length === 0 && authorGroups.length === 0 && (
             <p className="text-[11px] text-muted-foreground italic">No angles match your search.</p>

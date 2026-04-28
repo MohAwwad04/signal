@@ -177,6 +177,10 @@ export default async function SignalDetailPage({ params }: { params: { id: strin
             allAuthors={[]}
             frameworks={frameworksForEditor}
             bestFrameworkId={signal.bestFrameworkId ?? null}
+            contentAngles={allAngleNames}
+            existingPostCount={signalPosts.length}
+            defaultAuthorId={allAuthors[0]?.id ?? null}
+            initialGeneratedPost={latestEditablePost ? { id: latestEditablePost.id, content: latestEditablePost.content } : null}
             signalAngles={signalAngles}
             anglesWithAuthor={[]}
             globalAngles={[]}
