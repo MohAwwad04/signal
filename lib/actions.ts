@@ -383,6 +383,18 @@ export async function submitForReviewAction(postId: number) {
   revalidatePath(`/posts/${postId}`);
 }
 
+export async function deleteDraftPostAction(postId: number) {
+  const session = await getCurrentUser();
+  if (!session?.isAdmin && !session?.isSuperAdmin) throw new Error("Only admins can delete drafts.");
+  const [post] = await db.select({ status: schema.posts.status, signalId: schema.posts.signalId }).from(schema.posts).where(eq(schema.posts.id, postId));
+  if (!post) throw new Error("Post not found.");
+  if (post.status !== "draft") throw new Error("Only drafts can be removed this way.");
+  await db.delete(schema.posts).where(eq(schema.posts.id, postId));
+  revalidatePath("/signals");
+  revalidatePath("/drafts");
+  if (post.signalId) revalidatePath(`/signals/${post.signalId}`);
+}
+
 export async function approvePostAction(postId: number, notes?: string) {
   const session = await getCurrentUser();
   const [post] = await db.select({ authorId: schema.posts.authorId }).from(schema.posts).where(eq(schema.posts.id, postId));

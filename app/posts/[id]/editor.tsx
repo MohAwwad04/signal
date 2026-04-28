@@ -20,21 +20,22 @@ import {
   generateDesignBriefAction,
   recordAnalyticsAction,
   setLinkedinPostUrlAction,
+  deleteDraftPostAction,
 } from "@/lib/actions";
-import { Loader2, Scissors, Gauge, RefreshCw, Send, Check, X, Image as ImageIcon, BarChart3, FileEdit } from "lucide-react";
+import { Loader2, Scissors, Gauge, RefreshCw, Send, Check, X, Image as ImageIcon, BarChart3, FileEdit, Trash2 } from "lucide-react";
 
 export function PostEditor({
   post,
   author,
   brief: initialBrief,
   canApprove,
-  canSubmitForReview,
+  canManageDraft,
 }: {
   post: Post;
   author: Author | null;
   brief: DesignBrief | null;
   canApprove: boolean;
-  canSubmitForReview: boolean;
+  canManageDraft: boolean;
 }) {
   const router = useRouter();
   const [text, setText] = useState(post.content);
@@ -80,9 +81,25 @@ export function PostEditor({
     setLoading("submit");
     try {
       await submitForReviewAction(post.id);
-      toast({ title: "Sent for review", kind: "success" });
-      router.push("/drafts");
+      toast({ title: "Sent to user for review", kind: "success" });
+      startTransition(() => router.refresh());
+    } catch (e: any) {
+      toast({ title: "Failed to send", description: e?.message, kind: "error" });
     } finally {
+      setLoading(null);
+    }
+  }
+
+  async function removeDraft() {
+    if (!confirm("Delete this draft? This can't be undone.")) return;
+    setLoading("remove");
+    try {
+      await deleteDraftPostAction(post.id);
+      toast({ title: "Draft removed", kind: "success" });
+      const back = post.signalId ? `/signals/${post.signalId}` : "/drafts";
+      router.push(back);
+    } catch (e: any) {
+      toast({ title: "Failed to remove", description: e?.message, kind: "error" });
       setLoading(null);
     }
   }
@@ -180,11 +197,17 @@ export function PostEditor({
           <h1 className="text-2xl font-bold tracking-tight">Post #{post.id}</h1>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
-          {post.status === "draft" && canSubmitForReview && (
-            <Button onClick={submit} disabled={loading === "submit"}>
-              {loading === "submit" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-              Send for review
-            </Button>
+          {post.status === "draft" && canManageDraft && (
+            <>
+              <Button variant="outline" onClick={removeDraft} disabled={loading === "remove"} className="text-destructive hover:bg-destructive/10 hover:text-destructive border-destructive/30">
+                {loading === "remove" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                Remove draft
+              </Button>
+              <Button onClick={submit} disabled={loading === "submit"}>
+                {loading === "submit" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                Send to review
+              </Button>
+            </>
           )}
           {post.status === "in_review" && canApprove && (
             <>
