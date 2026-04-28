@@ -487,7 +487,7 @@ export function PostEditor({
                 )}
                 <Link href={`/posts/${generatedPost.id}`}>
                   <Button size="sm" variant="outline" className="text-xs">
-                    View post
+                    Create draft
                     <ArrowUpRight className="h-3.5 w-3.5" />
                   </Button>
                 </Link>

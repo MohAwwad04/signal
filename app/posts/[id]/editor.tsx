@@ -47,6 +47,7 @@ export function PostEditor({
   const [linkedinUrlInput, setLinkedinUrlInput] = useState(post.linkedinPostUrn ? `(URN: ${post.linkedinPostUrn})` : "");
   const [rejectNotes, setRejectNotes] = useState("");
   const [showRejectInput, setShowRejectInput] = useState(false);
+  const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
 
   useEffect(() => setText(post.content), [post.content]);
 
@@ -91,7 +92,7 @@ export function PostEditor({
   }
 
   async function removeDraft() {
-    if (!confirm("Delete this draft? This can't be undone.")) return;
+    setShowRemoveConfirm(false);
     setLoading("remove");
     try {
       await deleteDraftPostAction(post.id);
@@ -199,7 +200,7 @@ export function PostEditor({
         <div className="flex items-center gap-2 flex-shrink-0">
           {post.status === "draft" && canManageDraft && (
             <>
-              <Button variant="outline" onClick={removeDraft} disabled={loading === "remove"} className="text-destructive hover:bg-destructive/10 hover:text-destructive border-destructive/30">
+              <Button variant="outline" onClick={() => setShowRemoveConfirm(true)} disabled={loading === "remove"} className="text-destructive hover:bg-destructive/10 hover:text-destructive border-destructive/30">
                 {loading === "remove" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                 Remove draft
               </Button>
@@ -424,6 +425,44 @@ export function PostEditor({
           </Card>
         </aside>
       </div>
+
+      {showRemoveConfirm && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+          onClick={() => setShowRemoveConfirm(false)}
+        >
+          <div
+            className="w-full max-w-sm rounded-2xl border border-border bg-card p-5 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+          >
+            <div className="mb-3 flex items-center gap-2.5">
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-destructive/10">
+                <Trash2 className="h-4 w-4 text-destructive" />
+              </div>
+              <h2 className="text-base font-semibold">Remove this draft?</h2>
+            </div>
+            <p className="mb-5 text-sm text-muted-foreground">
+              The draft and its edit history will be permanently deleted. This can&apos;t be undone.
+            </p>
+            <div className="flex justify-end gap-2">
+              <Button variant="ghost" size="sm" onClick={() => setShowRemoveConfirm(false)} disabled={loading === "remove"}>
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                onClick={removeDraft}
+                disabled={loading === "remove"}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                {loading === "remove" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                Remove draft
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
