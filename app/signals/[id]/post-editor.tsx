@@ -14,6 +14,7 @@ import {
   updatePostContentAction,
   submitForReviewAction,
   getAuthorRecommendationAction,
+  getAnglesForSignalEditorAction,
 } from "@/lib/actions";
 import { toast } from "@/components/ui/toaster";
 import {
@@ -78,10 +79,21 @@ export function PostEditor({
   const [starringId, setStarringId] = useState<number | null>(null);
 
   // ── angle state ──
+  const [liveAngles, setLiveAngles] = useState<AngleWithAuthor[]>(anglesWithAuthor);
+  const [anglesLoading, setAnglesLoading] = useState(true);
   const [angleSearch, setAngleSearch] = useState("");
   const [filterAuthor, setFilterAuthor] = useState<string>("all");
   const [showAuthorFilter, setShowAuthorFilter] = useState(false);
   const [customAngle, setCustomAngle] = useState("");
+
+  useEffect(() => {
+    if (!isAdmin && !isSuperAdmin) { setAnglesLoading(false); return; }
+    getAnglesForSignalEditorAction()
+      .then(setLiveAngles)
+      .catch(() => {})
+      .finally(() => setAnglesLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ── generate / result state ──
   const [generating, setGenerating] = useState(false);
@@ -248,24 +260,24 @@ export function PostEditor({
 
   // ── angle filtering ──
   const authorNames = useMemo(() => {
-    const names = Array.from(new Set(anglesWithAuthor.map((a) => a.authorName)));
+    const names = Array.from(new Set(liveAngles.map((a) => a.authorName)));
     return names.sort();
-  }, [anglesWithAuthor]);
+  }, [liveAngles]);
 
   const filteredAnglesWithAuthor = useMemo(() => {
-    return anglesWithAuthor.filter((a) => {
+    return liveAngles.filter((a) => {
       if (filterAuthor !== "all" && a.authorName !== filterAuthor) return false;
       if (angleSearch.trim()) return a.name.toLowerCase().includes(angleSearch.toLowerCase());
       return true;
     });
-  }, [anglesWithAuthor, filterAuthor, angleSearch]);
+  }, [liveAngles, filterAuthor, angleSearch]);
 
   const filteredSignalAngles = useMemo(() => {
     if (!angleSearch.trim()) return signalAngles;
     return signalAngles.filter((a) => a.toLowerCase().includes(angleSearch.toLowerCase()));
   }, [signalAngles, angleSearch]);
 
-  // Deduplicate: don't show in anglesWithAuthor what's already shown as signal angle
+  // Deduplicate: don't show in author angles what's already shown as signal angle
   const signalAngleSet = new Set(signalAngles);
   const uniqueAuthorAngles = filteredAnglesWithAuthor.filter((a) => !signalAngleSet.has(a.name));
 
@@ -463,9 +475,10 @@ export function PostEditor({
         {/* Content angle picker */}
         <div>
           <div className="mb-2 flex items-center justify-between gap-2">
-            <div className="text-xs font-medium text-muted-foreground">
+            <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
               Content angle
               <span className="ml-1.5 text-muted-foreground/60">· click to generate</span>
+              {anglesLoading && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground/60" />}
             </div>
 
             {/* Filter by author — admin/superadmin only, when there are multiple authors */}
@@ -502,7 +515,7 @@ export function PostEditor({
           </div>
 
           {/* Search input */}
-          {(anglesWithAuthor.length > 6 || signalAngles.length > 6) && (
+          {(liveAngles.length > 6 || signalAngles.length > 6) && (
             <div className="relative mb-2">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
               <Input
@@ -517,7 +530,7 @@ export function PostEditor({
           {/* Signal's own angles (with recommended badge on first) */}
           {filteredSignalAngles.length > 0 && (
             <div className="mb-2">
-              {(isAdmin || isSuperAdmin) && anglesWithAuthor.length > 0 && (
+              {(isAdmin || isSuperAdmin) && liveAngles.length > 0 && (
                 <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">From signal</div>
               )}
               <div className="flex flex-wrap gap-1.5">

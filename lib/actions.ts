@@ -2,7 +2,7 @@
 
 import { db, schema } from "@/lib/db";
 import { revalidatePath } from "next/cache";
-import { desc, eq, and, sql, lt, inArray, or, isNull } from "drizzle-orm";
+import { desc, eq, and, sql, inArray, or, isNull } from "drizzle-orm";
 import { extractLinkedinPostUrn, jinaGet, fetchLinkedinAuthoredPosts, getValidLinkedinToken } from "@/lib/linkedin";
 import { sendInviteEmail } from "@/lib/email";
 import { randomBytes } from "crypto";
@@ -806,6 +806,60 @@ export async function getActiveAuthorsAction(): Promise<{ id: number; name: stri
 }
 
 /* ========== DASHBOARD ========== */
+
+/* ========== SIGNAL EDITOR ANGLES (client-side fetch) ========== */
+
+export async function getAnglesForSignalEditorAction(): Promise<
+  { name: string; authorId: number; authorName: string }[]
+> {
+  const session = await getCurrentUser();
+  if (!session?.isAdmin && !session?.isSuperAdmin) return [];
+
+  const visibleAuthorIds = await getVisibleAuthorIds();
+
+  const authors = await db
+    .select({ id: schema.authors.id, name: schema.authors.name, contentAngles: schema.authors.contentAngles })
+    .from(schema.authors)
+    .where(eq(schema.authors.active, true))
+    .then((rows) =>
+      visibleAuthorIds === null ? rows : rows.filter((a) => visibleAuthorIds.includes(a.id))
+    )
+    .catch(() => []);
+
+  const seen = new Set<string>();
+  const result: { name: string; authorId: number; authorName: string }[] = [];
+
+  // Primary: jsonb array on each author
+  for (const a of authors) {
+    for (const name of (a.contentAngles as string[] | null) ?? []) {
+      const key = `${a.id}:${name}`;
+      if (!seen.has(key)) { seen.add(key); result.push({ name, authorId: a.id, authorName: a.name }); }
+    }
+  }
+
+  // Supplemental: join table (catches angles not yet synced to jsonb)
+  const authorIds = authors.map((a) => a.id);
+  if (authorIds.length > 0) {
+    const joinRows = await db
+      .select({
+        name: schema.contentAngles.name,
+        authorId: schema.authorContentAngles.authorId,
+        authorName: schema.authors.name,
+      })
+      .from(schema.authorContentAngles)
+      .innerJoin(schema.contentAngles, eq(schema.authorContentAngles.contentAngleId, schema.contentAngles.id))
+      .innerJoin(schema.authors, eq(schema.authorContentAngles.authorId, schema.authors.id))
+      .where(inArray(schema.authorContentAngles.authorId, authorIds))
+      .catch(() => []);
+
+    for (const r of joinRows) {
+      const key = `${r.authorId}:${r.name}`;
+      if (!seen.has(key)) { seen.add(key); result.push(r); }
+    }
+  }
+
+  return result;
+}
 
 /* ========== AUTHOR-AWARE RECOMMENDATION ========== */
 

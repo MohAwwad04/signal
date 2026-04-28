@@ -39,9 +39,9 @@ export default async function SignalDetailPage({ params }: { params: { id: strin
   // Get visible authors — checks DB freshness every visit (force-dynamic)
   const visibleAuthorIds = await getVisibleAuthorIds();
 
-  // Fetch active authors filtered by visibility (include contentAngles for angle picker)
+  // Fetch active authors filtered by visibility
   const allAuthors = await db
-    .select({ id: schema.authors.id, name: schema.authors.name, role: schema.authors.role, contentAngles: schema.authors.contentAngles })
+    .select({ id: schema.authors.id, name: schema.authors.name, role: schema.authors.role })
     .from(schema.authors)
     .where(eq(schema.authors.active, true))
     .then((rows) =>
@@ -69,15 +69,6 @@ export default async function SignalDetailPage({ params }: { params: { id: strin
       db.update(schema.signals).set({ bestFrameworkId: bestId }).where(eq(schema.signals.id, id)).catch(() => {});
     }
   }
-
-  // Build anglesWithAuthor from authors.contentAngles jsonb (primary storage for angles)
-  const anglesWithAuthor: AngleWithAuthor[] = allAuthors.flatMap((a) =>
-    ((a.contentAngles as string[] | null) ?? []).map((name) => ({
-      name,
-      authorId: a.id,
-      authorName: a.name,
-    }))
-  );
 
   // Load transcript in parallel with posts/analytics
   const transcriptPromise = signal.transcriptId
@@ -119,21 +110,6 @@ export default async function SignalDetailPage({ params }: { params: { id: strin
     : [];
 
   const totalAnalytics = analyticsRows[0] ?? { impressions: 0, likes: 0, comments: 0, shares: 0 };
-
-  // Deduplicate anglesWithAuthor by name (same angle can belong to multiple authors)
-  const seenAngleNames = new Set<string>();
-  const uniqueAnglesWithAuthor: AngleWithAuthor[] = [];
-  for (const a of anglesWithAuthor) {
-    if (!seenAngleNames.has(a.name)) {
-      seenAngleNames.add(a.name);
-      uniqueAnglesWithAuthor.push(a);
-    }
-  }
-
-  // All global angle names not already in anglesWithAuthor
-  const globalOnlyAngles = allGlobalAngles
-    .filter((a) => !seenAngleNames.has(a.name))
-    .map((a) => a.name);
 
   const frameworksForEditor = frameworks.map((f) => ({
     id: f.id,
@@ -203,8 +179,8 @@ export default async function SignalDetailPage({ params }: { params: { id: strin
             frameworks={frameworksForEditor}
             bestFrameworkId={signal.bestFrameworkId ?? null}
             signalAngles={signalAngles}
-            anglesWithAuthor={uniqueAnglesWithAuthor}
-            globalAngles={globalOnlyAngles}
+            anglesWithAuthor={[]}
+            globalAngles={[]}
             recommendedAngle={recommendedAngle}
             isAdmin={session.isAdmin}
             isSuperAdmin={session.isSuperAdmin}
