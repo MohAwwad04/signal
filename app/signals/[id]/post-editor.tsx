@@ -242,6 +242,7 @@ export function PostEditor({
     if (!currentAuthorId) { toast({ title: "Assign an author first", kind: "error" }); return; }
     const finalAngle = (customAngle.trim() || activeAngle || "").trim();
     if (!finalAngle) { toast({ title: "Pick or write a content angle", kind: "error" }); return; }
+    setSelectedFrameworkId(fw.id);
     setGeneratingFwId(fw.id);
     setGenerating(true);
     try {
@@ -515,6 +516,7 @@ export function PostEditor({
               {frameworks.map((fw) => {
                 const isLoading = generatingFwId === fw.id;
                 const isStarred = localBestId === fw.id;
+                const isSelected = selectedFrameworkId === fw.id;
                 const isStarring = starringId === fw.id;
                 return (
                   <div key={fw.id} className="flex items-center gap-1">
@@ -524,7 +526,7 @@ export function PostEditor({
                       title={fw.description}
                       className={cn(
                         "flex items-center gap-1.5 rounded-l-full border px-3 py-1 text-xs font-medium transition-all",
-                        isStarred
+                        isSelected
                           ? "border-primary bg-primary/10 text-primary"
                           : "border-border bg-muted text-muted-foreground hover:border-primary/50 hover:text-foreground",
                         generating && !isLoading && "opacity-50 cursor-not-allowed"
