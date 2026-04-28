@@ -14,6 +14,8 @@ type Ctx = {
   signalId: number;
   scores: SignalScores;
   setScores: (s: SignalScores) => void;
+  currentAuthorId: number | null;
+  setCurrentAuthorId: (id: number | null) => void;
 };
 
 const ScoresCtx = createContext<Ctx | null>(null);
@@ -22,14 +24,17 @@ export function ScoresProvider({
   children,
   signalId,
   initial,
+  initialAuthorId,
 }: {
   children: React.ReactNode;
   signalId: number;
   initial: SignalScores;
+  initialAuthorId: number | null;
 }) {
   const [scores, setScores] = useState<SignalScores>(initial);
+  const [currentAuthorId, setCurrentAuthorId] = useState<number | null>(initialAuthorId);
   return (
-    <ScoresCtx.Provider value={{ signalId, scores, setScores }}>
+    <ScoresCtx.Provider value={{ signalId, scores, setScores, currentAuthorId, setCurrentAuthorId }}>
       {children}
     </ScoresCtx.Provider>
   );

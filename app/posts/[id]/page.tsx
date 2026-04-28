@@ -17,7 +17,7 @@ export default async function PostPage({ params }: { params: { id: string } }) {
     : [null];
   const brief = (await db.select().from(schema.designBriefs).where(eq(schema.designBriefs.postId, id)))[0] ?? null;
 
-  const canApprove = session?.isSuperAdmin || (!!session?.authorId && session.authorId === post.authorId);
+  const canApprove = !!session?.authorId && session.authorId === post.authorId;
   const canSubmitForReview = !session?.isAdmin && !session?.isSuperAdmin;
 
   return <PostEditor post={post} author={author} brief={brief} canApprove={canApprove} canSubmitForReview={canSubmitForReview} />;

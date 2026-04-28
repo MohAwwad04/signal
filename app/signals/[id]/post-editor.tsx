@@ -1,12 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
   updateSignalContentAction,
   archiveSignalAction,
-  applyFrameworkToSignalAction,
   updateSignalBestFrameworkAction,
   scoreSignalAction,
   scoreContentAction,
@@ -15,33 +15,49 @@ import {
   submitForReviewAction,
 } from "@/lib/actions";
 import { toast } from "@/components/ui/toaster";
-import { Edit2, Check, X, Copy, Trash2, Sparkles, Loader2, Star, ArrowUpRight, ArrowLeft, Send } from "lucide-react";
+import {
+  Edit2, Check, X, Copy, Trash2, Sparkles, Loader2, Star,
+  ArrowUpRight, ArrowLeft, Send, Search, ChevronDown, ChevronUp,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { useScores } from "./scores-provider";
+import type { AngleWithAuthor } from "./page";
 
-type Framework = { id: number; name: string; description: string };
+type Framework = { id: number; name: string; description: string; bestFor?: string[]; contentType?: string };
 
 export function PostEditor({
   signalId,
   initialContent,
-  authorName,
-  authorId,
+  authorName: initialAuthorName,
+  allAuthors = [],
   frameworks = [],
   bestFrameworkId,
-  contentAngles = [],
+  signalAngles = [],
+  anglesWithAuthor = [],
+  globalAngles = [],
+  recommendedAngle,
+  isAdmin,
+  isSuperAdmin,
 }: {
   signalId: number;
   initialContent: string;
   authorName?: string | null;
-  authorId?: number | null;
+  allAuthors?: { id: number; name: string }[];
   frameworks?: Framework[];
   bestFrameworkId?: number | null;
-  contentAngles?: string[];
+  signalAngles?: string[];
+  anglesWithAuthor?: AngleWithAuthor[];
+  globalAngles?: string[];
+  recommendedAngle?: string | null;
+  isAdmin?: boolean;
+  isSuperAdmin?: boolean;
 }) {
   const router = useRouter();
-  const { setScores } = useScores();
+  const { scores, setScores, currentAuthorId, setCurrentAuthorId: _setCurrentAuthorId } = useScores();
+  // Snapshot of signal scores to restore when leaving generated-post view
+  const [signalScoresSnapshot, setSignalScoresSnapshot] = useState<typeof scores | null>(null);
 
   // ── signal edit state ──
   const [editing, setEditing] = useState(false);
@@ -49,14 +65,21 @@ export function PostEditor({
   const [draft, setDraft] = useState(initialContent);
   const [saving, setSaving] = useState(false);
 
-  // ── framework state ──
-  const [activeFrameworkId, setActiveFrameworkId] = useState<number | null>(null);
-  const [applyingId, setApplyingId] = useState<number | null>(null);
+  // ── framework state (for generation) ──
+  const defaultFrameworkId = useMemo(() => {
+    if (bestFrameworkId) return bestFrameworkId;
+    const contentType = frameworks[0]?.contentType;
+    return frameworks.find((f) => contentType && f.bestFor?.includes(contentType))?.id ?? frameworks[0]?.id ?? null;
+  }, [bestFrameworkId, frameworks]);
+
+  const [selectedFrameworkId, setSelectedFrameworkId] = useState<number | null>(defaultFrameworkId);
   const [localBestId, setLocalBestId] = useState<number | null>(bestFrameworkId ?? null);
   const [starringId, setStarringId] = useState<number | null>(null);
 
-  // ── content angle state ──
-  const [angle, setAngle] = useState<string>(contentAngles[0] ?? "");
+  // ── angle state ──
+  const [angleSearch, setAngleSearch] = useState("");
+  const [filterAuthor, setFilterAuthor] = useState<string>("all");
+  const [showAuthorFilter, setShowAuthorFilter] = useState(false);
   const [customAngle, setCustomAngle] = useState("");
 
   // ── generate / result state ──
@@ -66,6 +89,7 @@ export function PostEditor({
   const [savingPost, setSavingPost] = useState(false);
   const [sendingReview, setSendingReview] = useState(false);
   const [sentToReview, setSentToReview] = useState(false);
+  const [activeAngle, setActiveAngle] = useState<string>(recommendedAngle ?? signalAngles[0] ?? "");
 
   const mode: "signal" | "generated" = generatedPost ? "generated" : "signal";
 
@@ -76,9 +100,7 @@ export function PostEditor({
       await updateSignalContentAction(signalId, draft);
       setContent(draft);
       setEditing(false);
-      setActiveFrameworkId(null);
       toast({ title: "Saved ✓", kind: "success" });
-      // Score the saved draft content and persist scores
       scoreContentAction(draft).then(async (s) => {
         setScores({ hookStrength: s.hookStrength, specificity: s.specificity, clarity: s.clarity, emotionalResonance: s.emotionalResonance, callToAction: s.callToAction });
         await scoreSignalAction(signalId);
@@ -103,27 +125,7 @@ export function PostEditor({
     router.push("/signals");
   }
 
-  // ── framework actions ──
-  async function applyFramework(fw: Framework) {
-    if (applyingId) return;
-    if (activeFrameworkId === fw.id) { setDraft(content); setActiveFrameworkId(null); return; }
-    setApplyingId(fw.id);
-    try {
-      const reformatted = await applyFrameworkToSignalAction(content, fw.id);
-      setDraft(reformatted);
-      setActiveFrameworkId(fw.id);
-      setEditing(true);
-      // Preview scores on the reformatted content immediately
-      scoreContentAction(reformatted).then((s) => {
-        setScores({ hookStrength: s.hookStrength, specificity: s.specificity, clarity: s.clarity, emotionalResonance: s.emotionalResonance, callToAction: s.callToAction });
-      }).catch(() => {});
-    } catch (e: any) {
-      toast({ title: "Failed to apply framework", description: e.message, kind: "error" });
-    } finally {
-      setApplyingId(null);
-    }
-  }
-
+  // ── framework star ──
   async function toggleStar(fw: Framework) {
     if (starringId) return;
     setStarringId(fw.id);
@@ -131,6 +133,7 @@ export function PostEditor({
     try {
       await updateSignalBestFrameworkAction(signalId, newBest);
       setLocalBestId(newBest);
+      if (newBest) setSelectedFrameworkId(newBest);
       toast({ title: newBest ? `"${fw.name}" starred as best` : "Star removed", kind: "success" });
     } catch (e: any) {
       toast({ title: "Failed to update", description: e.message, kind: "error" });
@@ -140,25 +143,42 @@ export function PostEditor({
   }
 
   // ── generate ──
-  async function generate() {
-    if (!authorId) { toast({ title: "Assign an author first", kind: "error" }); return; }
-    const finalAngle = (customAngle.trim() || angle || "").trim();
+  async function generate(angleOverride?: string) {
+    if (!currentAuthorId) { toast({ title: "Assign an author first", kind: "error" }); return; }
+    const finalAngle = (angleOverride ?? customAngle.trim() ?? activeAngle ?? "").trim();
     if (!finalAngle) { toast({ title: "Pick or write a content angle", kind: "error" }); return; }
+    const fwId = selectedFrameworkId ?? frameworks[0]?.id;
+    if (!fwId) { toast({ title: "Select a framework", kind: "error" }); return; }
     setGenerating(true);
     try {
       const post = await generatePostAction({
         signalId,
-        authorId,
-        frameworkId: localBestId ?? frameworks[0]?.id ?? null,
+        authorId: currentAuthorId,
+        frameworkId: fwId,
         contentAngle: finalAngle,
       });
       setGeneratedPost({ id: post.id, content: post.content });
       setGeneratedDraft(post.content);
+      // Switch score panel to show the generated post's scores
+      setSignalScoresSnapshot((prev) => prev ?? scores);
+      setScores({
+        hookStrength: post.hookStrengthScore ?? null,
+        specificity: post.specificityScore ?? null,
+        clarity: post.clarityScore ?? null,
+        emotionalResonance: post.emotionalResonanceScore ?? null,
+        callToAction: post.callToActionScore ?? null,
+      });
     } catch (e: any) {
       toast({ title: "Generation failed", description: e?.message, kind: "error" });
     } finally {
       setGenerating(false);
     }
+  }
+
+  function selectAngle(name: string) {
+    setActiveAngle(name);
+    setCustomAngle("");
+    generate(name);
   }
 
   // ── send to review ──
@@ -180,7 +200,6 @@ export function PostEditor({
     }
   }
 
-  // ── save edits to generated post ──
   async function saveGeneratedEdits() {
     if (!generatedPost) return;
     setSavingPost(true);
@@ -194,6 +213,44 @@ export function PostEditor({
       setSavingPost(false);
     }
   }
+
+  // ── angle filtering ──
+  const authorNames = useMemo(() => {
+    const names = Array.from(new Set(anglesWithAuthor.map((a) => a.authorName)));
+    return names.sort();
+  }, [anglesWithAuthor]);
+
+  const filteredAnglesWithAuthor = useMemo(() => {
+    return anglesWithAuthor.filter((a) => {
+      if (filterAuthor !== "all" && a.authorName !== filterAuthor) return false;
+      if (angleSearch.trim()) return a.name.toLowerCase().includes(angleSearch.toLowerCase());
+      return true;
+    });
+  }, [anglesWithAuthor, filterAuthor, angleSearch]);
+
+  const filteredSignalAngles = useMemo(() => {
+    if (!angleSearch.trim()) return signalAngles;
+    return signalAngles.filter((a) => a.toLowerCase().includes(angleSearch.toLowerCase()));
+  }, [signalAngles, angleSearch]);
+
+  // Deduplicate: don't show in anglesWithAuthor what's already shown as signal angle
+  const signalAngleSet = new Set(signalAngles);
+  const uniqueAuthorAngles = filteredAnglesWithAuthor.filter((a) => !signalAngleSet.has(a.name));
+
+  // Group by author name for display
+  const authorGroups = useMemo(() => {
+    const map = new Map<string, AngleWithAuthor[]>();
+    for (const a of uniqueAuthorAngles) {
+      const list = map.get(a.authorName) ?? [];
+      list.push(a);
+      map.set(a.authorName, list);
+    }
+    return Array.from(map.entries());
+  }, [uniqueAuthorAngles]);
+
+  const authorName = currentAuthorId
+    ? (allAuthors.find((a) => a.id === currentAuthorId)?.name ?? initialAuthorName)
+    : initialAuthorName;
 
   const initials = authorName
     ? authorName.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase()
@@ -250,7 +307,11 @@ export function PostEditor({
           <div className="flex gap-2">
             {mode === "generated" ? (
               <>
-                <Button size="sm" variant="ghost" onClick={() => { setGeneratedPost(null); setGeneratedDraft(""); }} className="text-xs">
+                <Button size="sm" variant="ghost" onClick={() => {
+                  setGeneratedPost(null);
+                  setGeneratedDraft("");
+                  if (signalScoresSnapshot) { setScores(signalScoresSnapshot); setSignalScoresSnapshot(null); }
+                }} className="text-xs">
                   <ArrowLeft className="h-3.5 w-3.5" />
                   Back to signal
                 </Button>
@@ -287,11 +348,7 @@ export function PostEditor({
             {mode === "generated" && generatedPost ? (
               <div className="flex gap-2">
                 {!sentToReview ? (
-                  <Button
-                    size="sm"
-                    onClick={sendToReview}
-                    disabled={sendingReview}
-                  >
+                  <Button size="sm" onClick={sendToReview} disabled={sendingReview}>
                     {sendingReview
                       ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
                       : <Send className="h-3.5 w-3.5" />}
@@ -318,37 +375,38 @@ export function PostEditor({
         </div>
       </div>
 
-      {/* ── Framework + angle + generate card ── */}
+      {/* ── Framework + angle card ── */}
       <div className="rounded-xl border border-border bg-card/60 px-4 py-3 space-y-4">
+
         {/* Framework picker */}
         {frameworks.length > 0 && (
           <div>
             <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
               <Sparkles className="h-3.5 w-3.5" />
-              Reformat with a framework
-              <span className="ml-1 text-muted-foreground/60">· ★ star the best one</span>
+              Framework
+              <span className="ml-1 text-muted-foreground/60">· ★ star the best</span>
             </div>
             <div className="flex flex-wrap gap-2">
               {frameworks.map((fw) => {
-                const isActive = activeFrameworkId === fw.id;
-                const isLoading = applyingId === fw.id;
+                const isSelected = selectedFrameworkId === fw.id;
                 const isStarred = localBestId === fw.id;
                 const isStarring = starringId === fw.id;
                 return (
                   <div key={fw.id} className="flex items-center gap-1">
                     <button
-                      onClick={() => applyFramework(fw)}
-                      disabled={!!applyingId}
+                      onClick={() => setSelectedFrameworkId(fw.id)}
                       title={fw.description}
                       className={cn(
                         "flex items-center gap-1.5 rounded-l-full border px-3 py-1 text-xs font-medium transition-all",
-                        isActive ? "border-primary bg-primary/10 text-primary" : "border-border bg-muted text-muted-foreground hover:border-primary/50 hover:text-foreground",
-                        applyingId && !isLoading && "opacity-50 cursor-not-allowed"
+                        isSelected
+                          ? "border-primary bg-primary/10 text-primary"
+                          : "border-border bg-muted text-muted-foreground hover:border-primary/50 hover:text-foreground"
                       )}
                     >
-                      {isLoading && <Loader2 className="h-3 w-3 animate-spin" />}
                       {fw.name}
-                      {isActive && <X className="h-3 w-3 opacity-60" />}
+                      {isStarred && (
+                        <Star className="h-2.5 w-2.5 fill-amber-400 text-amber-400" />
+                      )}
                     </button>
                     <button
                       onClick={() => toggleStar(fw)}
@@ -366,51 +424,166 @@ export function PostEditor({
                 );
               })}
             </div>
-            {localBestId && (
-              <p className="mt-2 text-[11px] text-amber-600 dark:text-amber-400 flex items-center gap-1">
-                <Star className="h-3 w-3 fill-current" />
-                {frameworks.find((f) => f.id === localBestId)?.name} is starred as best for this signal.
-              </p>
-            )}
           </div>
         )}
 
         {/* Content angle picker */}
         <div>
-          <div className="mb-2 text-xs font-medium text-muted-foreground">Content angle</div>
-          {contentAngles.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 mb-2">
-              {contentAngles.map((a) => (
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <div className="text-xs font-medium text-muted-foreground">
+              Content angle
+              <span className="ml-1.5 text-muted-foreground/60">· click to generate</span>
+            </div>
+
+            {/* Filter by author — admin/superadmin only, when there are multiple authors */}
+            {(isAdmin || isSuperAdmin) && authorNames.length > 1 && (
+              <div className="relative">
                 <button
-                  key={a}
                   type="button"
-                  onClick={() => { setAngle(a); setCustomAngle(""); }}
-                  className={cn(
-                    "rounded-full border px-3 py-1 text-xs transition-colors",
-                    angle === a && !customAngle
-                      ? "border-primary bg-primary/10 text-foreground"
-                      : "border-border bg-muted text-muted-foreground hover:border-primary/40 hover:text-foreground"
-                  )}
+                  onClick={() => setShowAuthorFilter((v) => !v)}
+                  className="flex items-center gap-1 rounded border border-border px-2 py-0.5 text-[11px] text-muted-foreground hover:border-primary/40 hover:text-foreground transition-colors"
                 >
-                  {a}
+                  {filterAuthor === "all" ? "All users" : filterAuthor}
+                  {showAuthorFilter ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
                 </button>
+                {showAuthorFilter && (
+                  <div className="absolute right-0 top-full z-20 mt-1 w-44 rounded-lg border border-border bg-popover shadow-md">
+                    {[{ label: "All users", value: "all" }, ...authorNames.map((n) => ({ label: n, value: n }))].map((opt) => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => { setFilterAuthor(opt.value); setShowAuthorFilter(false); }}
+                        className={cn(
+                          "flex w-full items-center gap-2 px-3 py-1.5 text-xs text-left hover:bg-accent transition-colors",
+                          filterAuthor === opt.value && "text-primary font-medium"
+                        )}
+                      >
+                        {filterAuthor === opt.value && <Check className="h-3 w-3" />}
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Search input */}
+          {(anglesWithAuthor.length > 6 || signalAngles.length > 6) && (
+            <div className="relative mb-2">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
+              <Input
+                value={angleSearch}
+                onChange={(e) => setAngleSearch(e.target.value)}
+                placeholder="Search angles…"
+                className="h-7 pl-7 text-xs"
+              />
+            </div>
+          )}
+
+          {/* Signal's own angles (with recommended badge on first) */}
+          {filteredSignalAngles.length > 0 && (
+            <div className="mb-2">
+              {(isAdmin || isSuperAdmin) && anglesWithAuthor.length > 0 && (
+                <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">From signal</div>
+              )}
+              <div className="flex flex-wrap gap-1.5">
+                {filteredSignalAngles.map((a, idx) => {
+                  const isActive = activeAngle === a && !customAngle;
+                  const isRecommended = a === recommendedAngle;
+                  return (
+                    <button
+                      key={a}
+                      type="button"
+                      onClick={() => selectAngle(a)}
+                      disabled={generating}
+                      className={cn(
+                        "flex items-center gap-1 rounded-full border px-3 py-1 text-xs transition-colors",
+                        isActive
+                          ? "border-primary bg-primary/10 text-foreground"
+                          : "border-border bg-muted text-muted-foreground hover:border-primary/40 hover:text-foreground",
+                        generating && "opacity-50 cursor-not-allowed"
+                      )}
+                    >
+                      {a}
+                      {isRecommended && (
+                        <span className="ml-0.5 rounded-full bg-amber-400/20 px-1 py-0.5 text-[9px] font-semibold text-amber-600 dark:text-amber-400">
+                          AI pick
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Author-grouped angles */}
+          {authorGroups.length > 0 && (
+            <div className="space-y-2">
+              {authorGroups.map(([authorName, angles]) => (
+                <div key={authorName}>
+                  {(isAdmin || isSuperAdmin) && (
+                    <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">{authorName}</div>
+                  )}
+                  <div className="flex flex-wrap gap-1.5">
+                    {angles.map((a) => {
+                      const isActive = activeAngle === a.name && !customAngle;
+                      return (
+                        <button
+                          key={a.name}
+                          type="button"
+                          onClick={() => selectAngle(a.name)}
+                          disabled={generating}
+                          className={cn(
+                            "rounded-full border px-3 py-1 text-xs transition-colors",
+                            isActive
+                              ? "border-primary bg-primary/10 text-foreground"
+                              : "border-border bg-muted text-muted-foreground hover:border-primary/40 hover:text-foreground",
+                            generating && "opacity-50 cursor-not-allowed"
+                          )}
+                        >
+                          {a.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
               ))}
             </div>
           )}
-          <Textarea
-            value={customAngle}
-            onChange={(e) => setCustomAngle(e.target.value)}
-            placeholder="Or write your own angle…"
-            className="text-xs min-h-[60px] resize-none"
-          />
-        </div>
 
-        {/* Generate button */}
-        <div className="flex justify-end">
-          <Button onClick={generate} disabled={generating || !authorId}>
-            {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-            {generating ? "Generating…" : "Generate post"}
-          </Button>
+          {/* No angles */}
+          {filteredSignalAngles.length === 0 && authorGroups.length === 0 && (
+            <p className="text-[11px] text-muted-foreground italic">No angles match your search.</p>
+          )}
+
+          {/* Custom angle */}
+          <div className="mt-2 flex items-end gap-2">
+            <Textarea
+              value={customAngle}
+              onChange={(e) => { setCustomAngle(e.target.value); if (e.target.value) setActiveAngle(""); }}
+              placeholder="Or write your own angle…"
+              className="text-xs min-h-[60px] resize-none flex-1"
+            />
+            <Button
+              size="sm"
+              onClick={() => generate()}
+              disabled={generating || !customAngle.trim()}
+              className="shrink-0 self-end"
+            >
+              {generating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+              Apply
+            </Button>
+          </div>
+
+          {/* Generating indicator */}
+          {generating && (
+            <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              Generating post…
+            </div>
+          )}
         </div>
       </div>
     </div>

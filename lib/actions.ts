@@ -2,7 +2,7 @@
 
 import { db, schema } from "@/lib/db";
 import { revalidatePath } from "next/cache";
-import { desc, eq, and, sql, lt, inArray } from "drizzle-orm";
+import { desc, eq, and, sql, lt, inArray, or, isNull } from "drizzle-orm";
 import { extractLinkedinPostUrn, jinaGet, fetchLinkedinAuthoredPosts, getValidLinkedinToken } from "@/lib/linkedin";
 import { sendInviteEmail } from "@/lib/email";
 import { randomBytes } from "crypto";
@@ -18,7 +18,7 @@ import {
   analyzeLinkedinPageContent,
 } from "@/lib/claude";
 import { ensureTranscript, scoreSignalsOrDelete, deduplicateAgainstExisting } from "@/lib/signals-helpers";
-import { getVisibleAuthorIds } from "@/lib/session";
+import { getVisibleAuthorIds, getCurrentUser } from "@/lib/session";
 
 /* ========== SIGNALS ========== */
 
@@ -268,7 +268,8 @@ export async function generatePostAction(input: {
   };
 
   let text = await generatePost(postInput);
-  let scores = await scorePost(text).catch(() => ({ hookStrength: 0, specificity: 0, notes: "" }));
+  const zeroScores = { hookStrength: 0, specificity: 0, clarity: 0, emotionalResonance: 0, callToAction: 0, notes: "" };
+  let scores = await scorePost(text).catch(() => zeroScores);
 
   // If the first draft scores poorly, try once more at a lower temperature for tighter output
   if (scores.hookStrength < 45 || scores.specificity < 45) {
@@ -293,6 +294,9 @@ export async function generatePostAction(input: {
       originalContent: text,
       hookStrengthScore: scores.hookStrength,
       specificityScore: scores.specificity,
+      clarityScore: scores.clarity,
+      emotionalResonanceScore: scores.emotionalResonance,
+      callToActionScore: scores.callToAction,
       status: "draft",
     })
     .returning();
@@ -375,6 +379,10 @@ export async function submitForReviewAction(postId: number) {
 }
 
 export async function approvePostAction(postId: number, notes?: string) {
+  const session = await getCurrentUser();
+  const [post] = await db.select({ authorId: schema.posts.authorId }).from(schema.posts).where(eq(schema.posts.id, postId));
+  if (!post) throw new Error("Post not found.");
+  if (!session?.authorId || session.authorId !== post.authorId) throw new Error("Not authorized to approve this post.");
   await db
     .update(schema.posts)
     .set({ status: "approved", reviewerNotes: notes ?? null, updatedAt: new Date() })
@@ -384,6 +392,10 @@ export async function approvePostAction(postId: number, notes?: string) {
 }
 
 export async function rejectPostAction(postId: number, notes: string) {
+  const session = await getCurrentUser();
+  const [post] = await db.select({ authorId: schema.posts.authorId }).from(schema.posts).where(eq(schema.posts.id, postId));
+  if (!post) throw new Error("Post not found.");
+  if (!session?.authorId || session.authorId !== post.authorId) throw new Error("Not authorized to reject this post.");
   await db
     .update(schema.posts)
     .set({ status: "rejected", reviewerNotes: notes, updatedAt: new Date() })
@@ -753,8 +765,29 @@ export async function addUserAction(email: string, role: string) {
 }
 
 export async function removeUserAction(id: number) {
+  const [user] = await db.select({ authorId: schema.users.authorId }).from(schema.users).where(eq(schema.users.id, id));
   await db.delete(schema.users).where(eq(schema.users.id, id));
+  if (user?.authorId) {
+    await db.update(schema.authors).set({ active: false }).where(eq(schema.authors.id, user.authorId)).catch(() => {});
+  }
   revalidatePath("/authors");
+  revalidatePath("/signals");
+}
+
+export async function getActiveAuthorsAction(): Promise<{ id: number; name: string; role: string | null }[]> {
+  return db
+    .select({ id: schema.authors.id, name: schema.authors.name, role: schema.authors.role })
+    .from(schema.authors)
+    .leftJoin(schema.users, eq(schema.users.authorId, schema.authors.id))
+    .where(
+      and(
+        eq(schema.authors.active, true),
+        or(isNull(schema.users.id), eq(schema.users.active, true))
+      )
+    )
+    .groupBy(schema.authors.id, schema.authors.name, schema.authors.role)
+    .orderBy(schema.authors.name)
+    .catch(() => []);
 }
 
 /* ========== DASHBOARD ========== */
