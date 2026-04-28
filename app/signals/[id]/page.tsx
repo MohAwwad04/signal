@@ -121,6 +121,14 @@ export default async function SignalDetailPage({ params }: { params: { id: strin
   // First signal content angle is the AI-recommended one (set during extraction)
   const recommendedAngle = signalAngles[0] ?? null;
 
+  // Available angle names for auto-generation (signal angles only — author angles fetched client-side)
+  const allAngleNames = signalAngles;
+
+  // Most recent draft or rejected post to pre-populate the editor on load
+  const latestEditablePost = signalPosts.find(
+    (p) => p.status === "draft" || p.status === "rejected"
+  ) ?? null;
+
   return (
     <div className="mx-auto w-full max-w-7xl p-6 md:p-10">
       {/* Back */}
