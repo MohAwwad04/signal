@@ -579,17 +579,31 @@ export async function deleteContentAngleAction(id: number) {
 }
 
 export async function addContentAngleToAuthorAction(authorId: number, angleId: number) {
-  await db
-    .insert(schema.authorContentAngles)
-    .values({ authorId, contentAngleId: angleId })
-    .onConflictDoNothing();
+  const [angle, author] = await Promise.all([
+    db.select({ name: schema.contentAngles.name }).from(schema.contentAngles).where(eq(schema.contentAngles.id, angleId)).then((r) => r[0] ?? null),
+    db.select({ contentAngles: schema.authors.contentAngles }).from(schema.authors).where(eq(schema.authors.id, authorId)).then((r) => r[0] ?? null),
+  ]);
+  await db.insert(schema.authorContentAngles).values({ authorId, contentAngleId: angleId }).onConflictDoNothing();
+  if (angle) {
+    const current = (author?.contentAngles as string[] | null) ?? [];
+    if (!current.includes(angle.name)) {
+      await db.update(schema.authors).set({ contentAngles: [...current, angle.name] } as any).where(eq(schema.authors.id, authorId));
+    }
+  }
   revalidatePath(`/authors/${authorId}`);
 }
 
 export async function removeContentAngleFromAuthorAction(authorId: number, angleId: number) {
-  await db
-    .delete(schema.authorContentAngles)
-    .where(and(eq(schema.authorContentAngles.authorId, authorId), eq(schema.authorContentAngles.contentAngleId, angleId)));
+  const [angle, author] = await Promise.all([
+    db.select({ name: schema.contentAngles.name }).from(schema.contentAngles).where(eq(schema.contentAngles.id, angleId)).then((r) => r[0] ?? null),
+    db.select({ contentAngles: schema.authors.contentAngles }).from(schema.authors).where(eq(schema.authors.id, authorId)).then((r) => r[0] ?? null),
+  ]);
+  await db.delete(schema.authorContentAngles).where(and(eq(schema.authorContentAngles.authorId, authorId), eq(schema.authorContentAngles.contentAngleId, angleId)));
+  if (angle) {
+    const current = (author?.contentAngles as string[] | null) ?? [];
+    const updated = current.filter((a) => a !== angle.name);
+    await db.update(schema.authors).set({ contentAngles: updated } as any).where(eq(schema.authors.id, authorId));
+  }
   revalidatePath(`/authors/${authorId}`);
 }
 
