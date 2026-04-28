@@ -30,17 +30,13 @@ export function LinkedinAutofill({
 
     setLoading(true);
     try {
-      // Save URL first (in case it changed)
       await updateAuthorAction(authorId, { linkedinUrl: trimmed });
-
-      // Now scrape + analyze
       const result = await scrapeLinkedinProfileAction(authorId);
       if (result.ok) {
         toast({ title: "Profile updated", description: result.message, kind: "success" });
-        // Reload so the new voice profile / angles appear
         window.location.reload();
       } else {
-        toast({ title: "Could not read LinkedIn profile", description: result.message, kind: "error" });
+        toast({ title: "Couldn't build profile", description: result.message, kind: "error" });
       }
     } catch (e: any) {
       toast({ title: "Something went wrong", description: e?.message, kind: "error" });
@@ -70,8 +66,11 @@ export function LinkedinAutofill({
           disabled={loading || !url.trim()}
         >
           <Sparkles className="h-3.5 w-3.5" />
-          {loading ? "Reading LinkedIn…" : "Auto-fill from LinkedIn"}
+          {loading ? "Researching profile (up to 30s)…" : "Auto-fill from LinkedIn"}
         </Button>
+        <p className="mt-1.5 text-[11px] text-muted-foreground">
+          Claude will research your profile and posts via web search to extract content angles, voice, and frameworks.
+        </p>
       </div>
     </div>
   );

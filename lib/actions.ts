@@ -16,6 +16,7 @@ import {
   generateDesignBrief,
   reformatPostWithFramework,
   analyzeLinkedinPageContent,
+  researchLinkedinProfileWithAgent,
   recommendForAuthor,
 } from "@/lib/claude";
 import { ensureTranscript, scoreSignalsOrDelete, deduplicateAgainstExisting } from "@/lib/signals-helpers";
@@ -688,53 +689,47 @@ export async function scrapeLinkedinProfileAction(authorId: number): Promise<{ o
     if (!author) return { ok: false, message: "Author not found." };
     if (!author.linkedinUrl) return { ok: false, message: "No LinkedIn URL set for this author." };
 
-    const vanity = author.linkedinUrl.match(/linkedin\.com\/in\/([^/?#]+)/i)?.[1] ?? null;
+    // Primary path: Sonnet agent uses web_search to autonomously research the profile.
+    // Falls back to LinkedIn API + Jina scraping if the agent finds nothing.
+    let analysis = await researchLinkedinProfileWithAgent(author.linkedinUrl, allFrameworks).catch(() => null);
 
-    const isAuthWall = (t: string) =>
-      t.includes("Sign in to LinkedIn") ||
-      t.includes("authwall") ||
-      t.includes("Join LinkedIn") ||
-      t.includes("Be seen by employers");
+    if (!analysis || (!analysis.voiceProfile && analysis.contentAngles.length === 0)) {
+      const vanity = author.linkedinUrl.match(/linkedin\.com\/in\/([^/?#]+)/i)?.[1] ?? null;
+      const isAuthWall = (t: string) =>
+        t.includes("Sign in to LinkedIn") ||
+        t.includes("authwall") ||
+        t.includes("Join LinkedIn") ||
+        t.includes("Be seen by employers");
 
-    // Try LinkedIn API first (reliable when connected), then fall back to Jina scraping
-    let apiPostsText: string | null = null;
-    if (author.linkedinAccessToken && author.linkedinMemberId) {
-      try {
-        const token = await getValidLinkedinToken(authorId);
-        const posts = await fetchLinkedinAuthoredPosts(token, author.linkedinMemberId);
-        if (posts && posts.length > 0) {
-          apiPostsText = posts.join("\n\n---\n\n");
-        }
-      } catch {
-        // token refresh failed or API unavailable — fall through to Jina
+      let apiPostsText: string | null = null;
+      if (author.linkedinAccessToken && author.linkedinMemberId) {
+        try {
+          const token = await getValidLinkedinToken(authorId);
+          const posts = await fetchLinkedinAuthoredPosts(token, author.linkedinMemberId);
+          if (posts && posts.length > 0) apiPostsText = posts.join("\n\n---\n\n");
+        } catch { /* fall through */ }
+      }
+
+      const [profileRaw, postsRaw] = await Promise.all([
+        jinaGet(author.linkedinUrl),
+        vanity && !apiPostsText
+          ? jinaGet(`https://www.linkedin.com/in/${vanity}/recent-activity/shares/`)
+          : Promise.resolve(null),
+      ]);
+
+      const profileText = profileRaw && !isAuthWall(profileRaw) ? profileRaw : null;
+      const postsText   = postsRaw   && !isAuthWall(postsRaw)   ? postsRaw   : null;
+      const fullText = [profileText, apiPostsText ?? postsText].filter(Boolean).join("\n\n---\n\n");
+
+      if (fullText) {
+        analysis = await analyzeLinkedinPageContent(fullText, allFrameworks);
       }
     }
 
-    // Fetch profile page + recent activity page via Jina Reader
-    const [profileRaw, postsRaw] = await Promise.all([
-      jinaGet(author.linkedinUrl),
-      vanity && !apiPostsText
-        ? jinaGet(`https://www.linkedin.com/in/${vanity}/recent-activity/shares/`)
-        : Promise.resolve(null),
-    ]);
-
-    const profileText = profileRaw && !isAuthWall(profileRaw) ? profileRaw : null;
-    const postsText   = postsRaw   && !isAuthWall(postsRaw)   ? postsRaw   : null;
-
-    const fullText = [profileText, apiPostsText ?? postsText].filter(Boolean).join("\n\n---\n\n");
-    if (!fullText) {
+    if (!analysis || (!analysis.voiceProfile && analysis.contentAngles.length === 0)) {
       return {
         ok: false,
-        message: "Could not read this LinkedIn profile — it may be private or require sign-in. Ensure the profile URL is correct and the account is set to public.",
-      };
-    }
-
-    const analysis = await analyzeLinkedinPageContent(fullText, allFrameworks);
-
-    if (!analysis.voiceProfile && analysis.contentAngles.length === 0) {
-      return {
-        ok: false,
-        message: `Profile page was fetched (${fullText.length} chars) but contained no readable posts. Make sure the LinkedIn profile has public posts.`,
+        message: "Couldn't gather enough public content for this profile. Try connecting LinkedIn directly or paste a few of your posts manually.",
       };
     }
 
@@ -762,6 +757,55 @@ export async function scrapeLinkedinProfileAction(authorId: number): Promise<{ o
   } catch (e: any) {
     console.error("[scrapeLinkedin]", e);
     return { ok: false, message: `Failed to read LinkedIn profile: ${e?.message ?? "unknown error"}` };
+  }
+}
+
+export async function analyzeLinkedinTextAction(
+  authorId: number,
+  pastedText: string,
+): Promise<{ ok: boolean; message: string }> {
+  try {
+    if (!pastedText || pastedText.trim().length < 200) {
+      return { ok: false, message: "Paste at least a few posts (200+ characters) so the analysis has enough to work with." };
+    }
+
+    const allFrameworks = await db
+      .select({ id: schema.frameworks.id, name: schema.frameworks.name, description: schema.frameworks.description })
+      .from(schema.frameworks);
+
+    const author = await db.select().from(schema.authors).where(eq(schema.authors.id, authorId)).then((r) => r[0]);
+    if (!author) return { ok: false, message: "Author not found." };
+
+    const analysis = await analyzeLinkedinPageContent(pastedText, allFrameworks);
+
+    if (!analysis.voiceProfile && analysis.contentAngles.length === 0) {
+      return { ok: false, message: "Could not extract a profile from the pasted text. Make sure it includes actual post content." };
+    }
+
+    const preferredFrameworkIds = analysis.preferredFrameworkNames
+      .map((name) => allFrameworks.find((f) => f.name.toLowerCase() === name.toLowerCase())?.id)
+      .filter((id): id is number => id !== undefined);
+
+    await db.update(schema.authors).set({
+      voiceProfile: analysis.voiceProfile || null,
+      styleNotes: analysis.styleNotes || null,
+      contentAngles: analysis.contentAngles.length
+        ? analysis.contentAngles
+        : ((author.contentAngles as string[] | null) ?? []),
+      ...(preferredFrameworkIds.length > 0 ? { preferredFrameworks: preferredFrameworkIds } : {}),
+    }).where(eq(schema.authors.id, authorId));
+
+    revalidatePath(`/authors/${authorId}`);
+    revalidatePath("/settings");
+
+    const parts: string[] = ["Profile updated from pasted content."];
+    if (analysis.contentAngles.length) parts.push(`${analysis.contentAngles.length} content angle(s) set.`);
+    if (preferredFrameworkIds.length)  parts.push(`${preferredFrameworkIds.length} preferred framework(s) matched.`);
+    if (analysis.voiceProfile)         parts.push("Voice profile built.");
+    return { ok: true, message: parts.join(" ") };
+  } catch (e: any) {
+    console.error("[analyzeLinkedinText]", e);
+    return { ok: false, message: `Failed to analyze pasted text: ${e?.message ?? "unknown error"}` };
   }
 }
 

@@ -780,6 +780,110 @@ export type LinkedinProfileAnalysis = {
   styleNotes: string;
 };
 
+/* ---------- linkedin profile research agent ---------- */
+
+/**
+ * Uses Claude as an agent with the web_search tool to autonomously research
+ * a LinkedIn profile and extract content angles, voice profile, style notes,
+ * and preferred frameworks. No scraping required — Claude does the research.
+ */
+export async function researchLinkedinProfileWithAgent(
+  linkedinUrl: string,
+  availableFrameworks: { name: string; description: string }[],
+): Promise<LinkedinProfileAnalysis> {
+  const anthropic = client();
+  const frameworkList = availableFrameworks
+    .map((f) => `• ${f.name}: ${f.description}`)
+    .join("\n");
+
+  const vanity = linkedinUrl.match(/linkedin\.com\/in\/([^/?#]+)/i)?.[1] ?? "";
+  const personName = vanity ? vanity.replace(/-/g, " ") : "this person";
+
+  const system = `You are a writing coach and ghostwriter analyst with web research capability.
+
+Your job: research a LinkedIn profile and any publicly available posts/content by the person, then build a precise writing profile that an AI can use to replicate their voice.
+
+Use the web_search tool to find:
+1. The person's LinkedIn profile information (their headline, bio, role)
+2. Their LinkedIn posts (search for quotes, post titles, reposts, mentions)
+3. Articles, interviews, podcasts, or talks they have done
+4. Any public writing samples (blog posts, Substack, X/Twitter)
+
+Run as many searches as you need (up to 5). Be specific in your queries — search for the person's name + topic combinations to find their actual writing.
+
+After research, return ONLY a JSON object — no explanation, no markdown fences. Output format strictly:
+{
+  "contentAngles": ["angle1", "angle2", ...],
+  "preferredFrameworkNames": ["Framework Name"],
+  "voiceProfile": "bullet rules separated by newlines",
+  "styleNotes": "1-2 sentence summary"
+}`;
+
+  const user = `Research this LinkedIn profile and build a writing profile for ${personName}:
+
+PROFILE URL: ${linkedinUrl}
+
+━━━ AVAILABLE FRAMEWORKS ━━━
+Match the author's natural post structure to one or more of these:
+${frameworkList}
+
+━━━ FIELD INSTRUCTIONS ━━━
+
+contentAngles — 3 to 8 specific narrow topics they ACTUALLY write about (derived from real posts, not job titles).
+Bad: "leadership", "business"
+Good: "scaling a bootstrapped SaaS", "Arab women in fintech", "founder delegation"
+
+preferredFrameworkNames — 1 to 3 framework names from the list above that match their natural post structure.
+
+voiceProfile — 6 to 10 bullet rules, newline-separated. Cover hook style, sentence length, paragraph length, use of numbers, rhetorical questions, personal pronouns, storytelling vs advice ratio, signature phrases. Each rule must be specific and immediately applicable.
+
+styleNotes — exactly 1-2 sentences describing what makes this author's writing recognisable.
+
+If you cannot find enough public content to confidently build a profile, return empty arrays/strings rather than guessing. Quality over completeness.
+
+Return ONLY the JSON object.`;
+
+  let lastErr: unknown;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    if (attempt > 0) await new Promise((r) => setTimeout(r, 1500));
+    try {
+      const msg = await anthropic.messages.create({
+        model: MODEL,
+        max_tokens: 4000,
+        temperature: 0.2,
+        system,
+        messages: [{ role: "user", content: user }],
+        tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 5 } as any],
+      });
+
+      // Find the final text block (after any tool_use/tool_result rounds)
+      const textBlock = [...msg.content].reverse().find((b) => b.type === "text") as { type: "text"; text: string } | undefined;
+      if (!textBlock?.text) {
+        if (attempt === 0) continue;
+        return { contentAngles: [], preferredFrameworkNames: [], voiceProfile: "", styleNotes: "" };
+      }
+
+      let parsed: Partial<LinkedinProfileAnalysis> = {};
+      try {
+        parsed = extractJson<LinkedinProfileAnalysis>(textBlock.text);
+      } catch {
+        if (attempt === 0) continue;
+      }
+
+      return {
+        contentAngles: Array.isArray(parsed.contentAngles) ? parsed.contentAngles : [],
+        preferredFrameworkNames: Array.isArray(parsed.preferredFrameworkNames) ? parsed.preferredFrameworkNames : [],
+        voiceProfile: parsed.voiceProfile ?? "",
+        styleNotes: parsed.styleNotes ?? "",
+      };
+    } catch (err: any) {
+      lastErr = err;
+      if (err?.status && err.status < 500 && err.status !== 429) throw err;
+    }
+  }
+  throw lastErr;
+}
+
 /* ---------- linkedin page scrape analysis ---------- */
 
 export async function analyzeLinkedinPageContent(
