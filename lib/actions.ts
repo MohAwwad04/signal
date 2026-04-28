@@ -823,10 +823,10 @@ export async function getAuthorRecommendationAction(
       .from(schema.frameworks)
       .orderBy(schema.frameworks.name),
     db
-      .select({ name: schema.contentAngles.name })
-      .from(schema.authorContentAngles)
-      .innerJoin(schema.contentAngles, eq(schema.authorContentAngles.contentAngleId, schema.contentAngles.id))
-      .where(eq(schema.authorContentAngles.authorId, authorId))
+      .select({ contentAngles: schema.authors.contentAngles })
+      .from(schema.authors)
+      .where(eq(schema.authors.id, authorId))
+      .then((r) => ((r[0]?.contentAngles as string[] | null) ?? []).map((name) => ({ name })))
       .catch(() => [] as { name: string }[]),
   ]);
 

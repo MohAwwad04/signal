@@ -39,9 +39,9 @@ export default async function SignalDetailPage({ params }: { params: { id: strin
   // Get visible authors — checks DB freshness every visit (force-dynamic)
   const visibleAuthorIds = await getVisibleAuthorIds();
 
-  // Fetch active authors filtered by visibility
+  // Fetch active authors filtered by visibility (include contentAngles for angle picker)
   const allAuthors = await db
-    .select({ id: schema.authors.id, name: schema.authors.name, role: schema.authors.role })
+    .select({ id: schema.authors.id, name: schema.authors.name, role: schema.authors.role, contentAngles: schema.authors.contentAngles })
     .from(schema.authors)
     .where(eq(schema.authors.active, true))
     .then((rows) =>
@@ -70,32 +70,14 @@ export default async function SignalDetailPage({ params }: { params: { id: strin
     }
   }
 
-  // Fetch angles for all visible authors with author metadata
-  const anglesWithAuthor: AngleWithAuthor[] = visibleAuthorIds === null
-    ? await db
-        .select({
-          name: schema.contentAngles.name,
-          authorId: schema.authors.id,
-          authorName: schema.authors.name,
-        })
-        .from(schema.authorContentAngles)
-        .innerJoin(schema.contentAngles, eq(schema.authorContentAngles.contentAngleId, schema.contentAngles.id))
-        .innerJoin(schema.authors, eq(schema.authorContentAngles.authorId, schema.authors.id))
-        .where(eq(schema.authors.active, true))
-        .catch(() => [])
-    : visibleAuthorIds.length > 0
-    ? await db
-        .select({
-          name: schema.contentAngles.name,
-          authorId: schema.authors.id,
-          authorName: schema.authors.name,
-        })
-        .from(schema.authorContentAngles)
-        .innerJoin(schema.contentAngles, eq(schema.authorContentAngles.contentAngleId, schema.contentAngles.id))
-        .innerJoin(schema.authors, eq(schema.authorContentAngles.authorId, schema.authors.id))
-        .where(inArray(schema.authorContentAngles.authorId, visibleAuthorIds))
-        .catch(() => [])
-    : [];
+  // Build anglesWithAuthor from authors.contentAngles jsonb (primary storage for angles)
+  const anglesWithAuthor: AngleWithAuthor[] = allAuthors.flatMap((a) =>
+    ((a.contentAngles as string[] | null) ?? []).map((name) => ({
+      name,
+      authorId: a.id,
+      authorName: a.name,
+    }))
+  );
 
   // Load transcript in parallel with posts/analytics
   const transcriptPromise = signal.transcriptId
