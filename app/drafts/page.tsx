@@ -12,13 +12,14 @@ export const revalidate = 0;
 export const fetchCache = "force-no-store";
 
 type TabDef = { key: string; label: string; statuses: string[]; icon: any; color: string };
-type TabKey = "drafts" | "accepted" | "rejected";
+type TabKey = "drafts" | "in_review" | "accepted" | "rejected";
 
-// Admins only see their own drafts (in_review posts are owned by the assigned user); regular users only see in_review (sent to them)
+// Admins see drafts (their own), in_review (sent, awaiting user), accepted, rejected. Regular users only see in_review (sent to them).
 const ADMIN_TABS: TabDef[] = [
-  { key: "drafts",   label: "Drafts",    statuses: ["draft"],                icon: FileEdit,      color: "text-blue-500"   },
-  { key: "accepted", label: "Accepted",  statuses: ["approved", "published"], icon: CheckCircle2, color: "text-emerald-500" },
-  { key: "rejected", label: "Rejected",  statuses: ["rejected"],             icon: XCircle,      color: "text-red-500"    },
+  { key: "drafts",    label: "Drafts",    statuses: ["draft"],                 icon: FileEdit,      color: "text-blue-500"   },
+  { key: "in_review", label: "In review", statuses: ["in_review"],             icon: Clock,         color: "text-amber-500"  },
+  { key: "accepted",  label: "Accepted",  statuses: ["approved", "published"], icon: CheckCircle2, color: "text-emerald-500" },
+  { key: "rejected",  label: "Rejected",  statuses: ["rejected"],              icon: XCircle,      color: "text-red-500"    },
 ];
 
 const USER_TABS: TabDef[] = [
@@ -138,7 +139,9 @@ export default async function DraftsPage({ searchParams }: { searchParams: { tab
           <p className="text-sm font-medium">No {tab.label.toLowerCase()} yet</p>
           <p className="mt-1 text-xs text-muted-foreground">
             {tab.key === "drafts"
-              ? isRegularUser ? "Your admin will send posts here for you to review." : "Generate a post from a signal to see it here in review."
+              ? isRegularUser ? "Your admin will send posts here for you to review." : "Generate a post from a signal to see it here as a draft."
+              : tab.key === "in_review"
+              ? "Posts sent to a user that are awaiting their approval will appear here."
               : tab.key === "accepted"
               ? "Approved posts will appear here."
               : "Rejected posts will appear here."}
