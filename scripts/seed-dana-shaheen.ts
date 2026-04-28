@@ -7,6 +7,10 @@
 
 import { db, schema } from "../lib/db";
 import { eq } from "drizzle-orm";
+import { hashPassword } from "../lib/password";
+
+const USER_EMAIL = "dana@signal.app";
+const USER_ROLE: "admin" | "superadmin" | "user" = "admin";
 
 const LINKEDIN_URL = "https://www.linkedin.com/in/danashaheen/";
 
@@ -138,6 +142,32 @@ async function main() {
     anglesLinked++;
   }
   console.log(`   Content angles linked: ${anglesLinked}`);
+
+  // ── Ensure user account exists ───────────────────────────────────────────
+  const normalizedEmail = USER_EMAIL.trim().toLowerCase();
+  const existingUser = await db
+    .select({ id: schema.users.id })
+    .from(schema.users)
+    .where(eq(schema.users.email, normalizedEmail));
+
+  if (existingUser.length > 0) {
+    await db
+      .update(schema.users)
+      .set({ authorId, active: true })
+      .where(eq(schema.users.email, normalizedEmail));
+    console.log(`   User ${normalizedEmail} already exists — linked to author ${authorId}`);
+  } else {
+    const tempPassword = "Dana2025!";
+    await db.insert(schema.users).values({
+      email: normalizedEmail,
+      role: USER_ROLE,
+      authorId,
+      active: true,
+      passwordHash: hashPassword(tempPassword),
+    });
+    console.log(`   Created user: ${normalizedEmail} (role: ${USER_ROLE})`);
+    console.log(`   Temp password: ${tempPassword}  ← change after first login`);
+  }
 
   console.log(`\n✅  Dana Shaheen is live at /authors/${authorId}`);
   console.log(
