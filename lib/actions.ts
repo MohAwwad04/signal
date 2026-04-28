@@ -297,8 +297,6 @@ export async function generatePostAction(input: {
     })
     .returning();
 
-  await db.update(schema.signals).set({ status: "drafting" }).where(eq(schema.signals.id, input.signalId));
-
   revalidatePath("/signals");
   revalidatePath("/");
   revalidatePath(`/posts/${post.id}`);
@@ -369,7 +367,12 @@ export async function assistedEditAction(postId: number, instruction: string) {
 }
 
 export async function submitForReviewAction(postId: number) {
+  const [post] = await db.select({ signalId: schema.posts.signalId }).from(schema.posts).where(eq(schema.posts.id, postId));
   await db.update(schema.posts).set({ status: "in_review", updatedAt: new Date() }).where(eq(schema.posts.id, postId));
+  if (post?.signalId) {
+    await db.update(schema.signals).set({ status: "drafting" }).where(eq(schema.signals.id, post.signalId));
+  }
+  revalidatePath("/signals");
   revalidatePath("/review");
   revalidatePath(`/posts/${postId}`);
 }

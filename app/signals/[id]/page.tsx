@@ -113,6 +113,11 @@ export default async function SignalDetailPage({ params }: { params: { id: strin
     description: f.description,
   }));
 
+  // Most recent draft or rejected post to pre-populate the editor on load
+  const latestEditablePost = signalPosts.find(
+    (p) => p.status === "draft" || p.status === "rejected"
+  ) ?? null;
+
   return (
     <div className="mx-auto w-full max-w-7xl p-6 md:p-10">
       {/* Back */}
@@ -169,6 +174,9 @@ export default async function SignalDetailPage({ params }: { params: { id: strin
             frameworks={frameworksForEditor}
             bestFrameworkId={signal.bestFrameworkId ?? null}
             contentAngles={allAngleNames}
+            existingPostCount={signalPosts.length}
+            defaultAuthorId={allAuthors[0]?.id ?? null}
+            initialGeneratedPost={latestEditablePost ? { id: latestEditablePost.id, content: latestEditablePost.content } : null}
           />
 
           {signalPosts.length > 0 && (
